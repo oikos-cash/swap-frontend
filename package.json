@@ -1,7 +1,7 @@
 {
   "name": "@oikos/swap-frontend",
   "homepage": ".",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "dependencies": {
     "@oikos/oikos-js": "0.0.1",
