@@ -1,20 +1,20 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import { connect } from 'react-redux';
-import classnames from 'classnames';
-import UAParser from 'ua-parser-js';
-import { withNamespaces } from 'react-i18next';
-import Logo from '../Logo';
-import CoinbaseWalletLogo from '../../assets/images/coinbase-wallet-logo.png';
-import TrustLogo from '../../assets/images/trust-wallet-logo.svg';
-import BraveLogo from '../../assets/images/brave-logo.svg';
-import MetamaskLogo from '../../assets/images/metamask-logo.svg';
-import Web3Status from '../Web3Status';
+import React, { Component } from "react";
+import PropTypes from "prop-types";
+import { connect } from "react-redux";
+import classnames from "classnames";
+import UAParser from "ua-parser-js";
+import { withNamespaces } from "react-i18next";
+import Logo from "../Logo";
+//import CoinbaseWalletLogo from "../../assets/images/coinbase-wallet-logo.png";
+//import TrustLogo from "../../assets/images/trust-wallet-logo.svg";
+//import BraveLogo from "../../assets/images/brave-logo.svg";
+import TronLinkLogo from "../../assets/images/tronlink-logo.svg";
+import Web3Status from "../Web3Status";
 
 import "./header.scss";
 
 const links = {
-  coinbaseWallet: {
+  /*coinbaseWallet: {
     android: 'https://play.google.com/store/apps/details?id=org.toshi',
     ios: 'https://itunes.apple.com/us/app/coinbase-wallet/id1278383455'
   },
@@ -28,19 +28,22 @@ const links = {
   brave: {
     android: 'https://play.google.com/store/apps/details?id=com.brave.browser',
     ios: 'https://itunes.apple.com/us/app/brave-browser-fast-adblocker/id1052879175',
-  },
+  },*/
+  tronlink: {
+    chrome: 'https://chrome.google.com/webstore/detail/tronlink%EF%BC%88%E6%B3%A2%E5%AE%9D%E9%92%B1%E5%8C%85%EF%BC%89/ibnejdfjmmkpcnlpebklmnkoeoihofec'
+  }
 };
 
 const ua = new UAParser(window.navigator.userAgent);
 
-function getTrustLink() {
+/*function getTrustLink() {
   const os = ua.getOS();
 
-  if (os.name === 'Android') {
+  if (os.name === "Android") {
     return links.trust.android;
   }
 
-  if (os.name === 'iOS') {
+  if (os.name === "iOS") {
     return links.trust.ios;
   }
 }
@@ -48,11 +51,11 @@ function getTrustLink() {
 function getCoinbaseWalletLink() {
   const os = ua.getOS();
 
-  if (os.name === 'Android') {
+  if (os.name === "Android") {
     return links.coinbaseWallet.android;
   }
 
-  if (os.name === 'iOS') {
+  if (os.name === "iOS") {
     return links.coinbaseWallet.ios;
   }
 }
@@ -60,33 +63,28 @@ function getCoinbaseWalletLink() {
 function getBraveLink() {
   const os = ua.getOS();
 
-  if (os.name === 'Mac OS') {
+  if (os.name === "Mac OS") {
     return links.brave.ios;
   }
 
   return links.brave.android;
 }
-
-function getMetamaskLink() {
-  return links.metamask.chrome;
+*/
+function getTronLinkLink() {
+  return links.tronlink.chrome;
 }
 
-function isMobile() {
-  return ua.getDevice().type === 'mobile';
-}
+//function isMobile() {
+//  return ua.getDevice().type === "mobile";
+//}
 
 class BlockingWarning extends Component {
-  render () {
-    const {
-      t,
-      isConnected,
-      initialized,
-      networkId,
-    } = this.props;
+  render() {
+    const { t, isConnected, initialized, networkId } = this.props;
     let content = [];
 
     const correctNetworkId = process.env.REACT_APP_NETWORK_ID || 1;
-    const correctNetwork = process.env.REACT_APP_NETWORK || 'Main Ton Network';
+    const correctNetwork = process.env.REACT_APP_NETWORK || "Main Tron Network";
 
     const wrongNetwork = networkId != correctNetworkId;
 
@@ -94,7 +92,7 @@ class BlockingWarning extends Component {
       content = [
         <div key="warning-title">{t("wrongNetwork")}</div>,
         <div key="warning-desc" className="header__dialog__description">
-          {t("switchNetwork", {correctNetwork})}
+          {t("switchNetwork", { correctNetwork })}
         </div>,
       ];
     }
@@ -104,26 +102,32 @@ class BlockingWarning extends Component {
         <div key="warning-title">{t("noWallet")}</div>,
         <div key="warning-desc" className="header__dialog__description">
           {
-            isMobile()
-              ? t("installWeb3MobileBrowser")
-              : t("installMetamask")
+            // isMobile()
+            /*   ? t("installWeb3MobileBrowser")
+              : */ 
+            //TODO replace with tronlink
+              t(
+              "installMetamask"
+            )
           }
         </div>,
         <div key="warning-logos" className="header__download">
           {
-            isMobile()
+            /*isMobile()
               ? (
                 [
                   <img src={CoinbaseWalletLogo} key="coinbase-wallet" onClick={() => window.open(getCoinbaseWalletLink(), '_blank')} />,
                   <img src={TrustLogo} key="trust" onClick={() => window.open(getTrustLink(), '_blank')} />
                 ]
               )
-              : (
-                [
-                  <img src={MetamaskLogo} key="metamask" onClick={() => window.open(getMetamaskLink(), '_blank')} />,
-                  <img src={BraveLogo} key="brave" onClick={() => window.open(getBraveLink(), '_blank')} />
-                ]
-              )
+              :*/
+            [
+              <img
+                src={TronLinkLogo}
+                key="tronlink"
+                onClick={() => window.open(getTronLinkLink(), "_blank")}
+              />,
+            ]
           }
         </div>,
       ];
@@ -131,8 +135,9 @@ class BlockingWarning extends Component {
 
     return (
       <div
-        className={classnames('header__dialog', {
-          'header__dialog--disconnected': (!isConnected || wrongNetwork) && initialized,
+        className={classnames("header__dialog", {
+          "header__dialog--disconnected":
+            (!isConnected || wrongNetwork) && initialized,
         })}
       >
         {content}
@@ -141,13 +146,13 @@ class BlockingWarning extends Component {
   }
 }
 
-function Header (props) {
+function Header(props) {
   return (
     <div className="header">
       <BlockingWarning {...props} />
       <div
-        className={classnames('header__top', {
-          'header--inactive': !props.isConnected,
+        className={classnames("header__top", {
+          "header--inactive": !props.isConnected,
         })}
       >
         <Logo />
@@ -157,7 +162,7 @@ function Header (props) {
         <Web3Status isConnected />
       </div>
     </div>
-  )
+  );
 }
 
 Header.propTypes = {
@@ -165,12 +170,10 @@ Header.propTypes = {
   isConnected: PropTypes.bool.isRequired,
 };
 
-export default connect(
-  state => ({
-    currentAddress: state.web3connect.account,
-    initialized: state.web3connect.initialized,
-    isConnected: !!state.web3connect.account,
-    web3: state.web3connect.web3,
-    networkId: state.web3connect.networkId,
-  }),
-)(withNamespaces()(Header));
+export default connect((state) => ({
+  currentAddress: state.web3connect.account,
+  initialized: state.web3connect.initialized,
+  isConnected: !!state.web3connect.account,
+  web3: state.web3connect.web3,
+  networkId: state.web3connect.networkId,
+}))(withNamespaces()(Header));
