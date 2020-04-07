@@ -107,7 +107,7 @@ class BlockingWarning extends Component {
               : */ 
             //TODO replace with tronlink
               t(
-              "installMetamask"
+              "installTronlink"
             )
           }
         </div>,

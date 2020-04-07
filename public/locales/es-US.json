@@ -3,7 +3,7 @@
 	"wrongNetwork": "Se encuentra en la red equivocada",
 	"switchNetwork": "Por favor cambie a {{ correctNetwork }}",
 	"installWeb3MobileBrowser": "Por favor ingrese desde un navegador móvil con web3 habilitado como Trust Wallet o Coinbase Wallet.",
-	"installMetamask": "Por favor visítenos nuevamente luego de instalar Metamask en Chrome o Brave.",
+	"installTronlink": "Por favor visítenos nuevamente luego de instalar Tronink.",
 	"disconnected": "Desconectado",
 	"swap": "Intercambiar",
 	"send": "Enviar",
