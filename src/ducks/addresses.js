@@ -6,6 +6,8 @@ const snxJS = new SynthetixJs({ networkId: 2 });
 
 const sUSDAddress = snxJS.sUSD.contract.address;
 const sBTTAddress = snxJS.sBTT.contract.address;
+const sTRXAddress = snxJS.sTRX.contract.address;
+
 const oksAddress = "41e90ca52ebf82c295d79024076d37b6c5c604e172"; //snxJS.Synthetix.contract.address;
 
 const RINKEBY = null;
@@ -21,11 +23,13 @@ const MAIN = {
       ["sUSD", "TQWkJqpnx9iuanoTqYMiPyc6PDVmU8HUAZ"],
       ["sBTT", "THQbsSwQdR4NgzAzoucrMeiWgChHBfBGzJ"],
       ["OKS", "THoTAowyt2N51ctGxPKLbEoxX9Gwy2BHzK"],
+      ["sTRX", "TNBQa5g42q2NgRXyJhLZN7MJkCeAt4anf4"]
     ],
     fromToken: {
       [sUSDAddress]: "TQWkJqpnx9iuanoTqYMiPyc6PDVmU8HUAZ",
       [sBTTAddress]: "THQbsSwQdR4NgzAzoucrMeiWgChHBfBGzJ",
       [oksAddress]: "THoTAowyt2N51ctGxPKLbEoxX9Gwy2BHzK",
+      [sTRXAddress]: "TNBQa5g42q2NgRXyJhLZN7MJkCeAt4anf4"
     },
   },
   tokenAddresses: {
@@ -33,6 +37,7 @@ const MAIN = {
       ["sUSD", sUSDAddress],
       ["sBTT", sBTTAddress],
       ["OKS", oksAddress],
+      ["sTRX", sTRXAddress]
     ],
   },
 };
