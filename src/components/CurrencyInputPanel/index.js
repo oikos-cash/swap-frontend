@@ -1,432 +1,702 @@
-import React, { Component } from 'react';
-import { connect } from 'react-redux';
-import PropTypes from 'prop-types';
-import { CSSTransitionGroup } from "react-transition-group";
-import classnames from 'classnames';
-import { withRouter } from 'react-router-dom';
-import { withNamespaces } from 'react-i18next';
-import Fuse from '../../helpers/fuse';
-import Modal from '../Modal';
-import TokenLogo from '../TokenLogo';
-import SearchIcon from '../../assets/images/magnifying-glass.svg';
-import { selectors, addPendingTx } from "../../ducks/web3connect";
-import { addApprovalTx } from "../../ducks/pending";
-import { addExchange } from "../../ducks/addresses";
-import { BigNumber as BN } from 'bignumber.js';
+import React, { useState, useRef, useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { ethers } from 'ethers'
+import { BigNumber } from '@uniswap/sdk'
+import styled from 'styled-components'
+import escapeStringRegex from 'escape-string-regexp'
+import { darken } from 'polished'
+import Tooltip from '@reach/tooltip'
+import '@reach/tooltip/styles.css'
+import { isMobile } from 'react-device-detect'
 
-import './currency-panel.scss';
+import { BorderlessInput } from '../../theme'
+import { useWeb3React, useTokenContract } from '../../hooks'
+import { isAddress, formatToUsd, formatTokenBalance, formatEthBalance } from '../../utils'
+import { ReactComponent as DropDown } from '../../assets/images/dropdown.svg'
+import Modal from '../Modal'
+import TokenLogo from '../TokenLogo'
+import SearchIcon from '../../assets/images/magnifying-glass.svg'
+import { useTransactionAdder, usePendingApproval } from '../../contexts/Transactions'
+import { useTokenDetails, useAllTokenDetails, INITIAL_TOKENS_CONTEXT } from '../../contexts/Tokens'
+import { useAddressBalance } from '../../contexts/Balances'
+import { ReactComponent as Close } from '../../assets/images/x.svg'
+import { transparentize } from 'polished'
+import { Spinner } from '../../theme'
+import Circle from '../../assets/images/circle-grey.svg'
+import { useETHPriceInUSD, useAllBalances } from '../../contexts/Balances'
 
-import ERC20_ABI from '../../abi/erc20';
-import FACTORY_ABI from '../../abi/factory';
+// const GAS_MARGIN = ethers.utils.bigNumberify(1000)
 
-const FUSE_OPTIONS = {
-  includeMatches: false,
-  threshold: 0.0,
-  tokenize:true,
-  location: 0,
-  distance: 100,
-  maxPatternLength: 45,
-  minMatchCharLength: 1,
-  keys: [
-    {name:"address",weight:0.8},
-    {name:"label",weight:0.5},
-  ]
-};
+const SubCurrencySelect = styled.button`
+  ${({ theme }) => theme.flexRowNoWrap}
+  padding: 4px 50px 4px 15px;
+  margin-right: -40px;
+  line-height: 0;
+  height: 2rem;
+  align-items: center;
+  border-radius: 2.5rem;
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+  background: ${({ theme }) => theme.zumthorBlue};
+  border: 1px solid ${({ theme }) => theme.royalBlue};
+  color: ${({ theme }) => theme.royalBlue};
+`
 
-const TOKEN_ADDRESS_TO_LABEL = { TRX: 'TRX' };
+const InputRow = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  align-items: center;
 
-class CurrencyInputPanel extends Component {
-  static propTypes = {
-    title: PropTypes.string,
-    description: PropTypes.string,
-    extraText: PropTypes.string,
-    value: PropTypes.string,
-    onCurrencySelected: PropTypes.func,
-    onValueChange: PropTypes.func,
-    tokenAddresses: PropTypes.shape({
-      addresses: PropTypes.array.isRequired,
-    }).isRequired,
-    exchangeAddresses: PropTypes.shape({
-      fromToken: PropTypes.object.isRequired,
-    }).isRequired,
-    factoryAddress: PropTypes.string,
-    selectedTokens: PropTypes.array.isRequired,
-    errorMessage: PropTypes.string,
-    account: PropTypes.string,
-    selectedTokenAddress: PropTypes.string,
-    disableTokenSelect: PropTypes.bool,
-    selectors: PropTypes.func.isRequired,
-    addExchange: PropTypes.func.isRequired,
-    filteredTokens: PropTypes.arrayOf(PropTypes.string),
-    disableUnlock: PropTypes.bool,
-    renderInput: PropTypes.func,
-  };
+  padding: 0.25rem 0.85rem 0.75rem;
+`
 
-  static defaultProps = {
-    selectedTokens: [],
-    filteredTokens: [],
-    onCurrencySelected() {},
-    onValueChange() {},
-    selectedTokenAddress: '',
-  };
+const Input = styled(BorderlessInput)`
+  font-size: 1.5rem;
+  color: ${({ error, theme }) => error && theme.salmonRed};
+  background-color: ${({ theme }) => theme.inputBackground};
+  -moz-appearance: textfield;
+`
 
-  state = {
-    isShowingModal: false,
-    searchQuery: '',
-    loadingExchange: false,
-  };
+const StyledBorderlessInput = styled(BorderlessInput)`
+  min-height: 2.5rem;
+  flex-shrink: 0;
+  text-align: left;
+  padding-left: 1.6rem;
+  background-color: ${({ theme }) => theme.concreteGray};
+`
 
-  createTokenList = () => {
-    const { filteredTokens } = this.props;
-    let tokens = this.props.tokenAddresses.addresses;
-    let tokenList = [ { value: 'TRX', label: 'TRX', address: 'TRX' } ];
+const CurrencySelect = styled.button`
+  align-items: center;
+  font-size: 1rem;
+  color: ${({ selected, theme }) => (selected ? theme.textColor : theme.royalBlue)};
+  height: 2rem;
+  border: 1px solid ${({ selected, theme }) => (selected ? theme.mercuryGray : theme.royalBlue)};
+  border-radius: 2.5rem;
+  background-color: ${({ selected, theme }) => (selected ? theme.concreteGray : theme.zumthorBlue)};
+  outline: none;
+  cursor: pointer;
+  user-select: none;
 
-    for (let i = 0; i < tokens.length; i++) {
-        let entry = { value: '', label: '' };
-        entry.value = tokens[i][0];
-        entry.label = tokens[i][0];
-        entry.address = tokens[i][1];
-        tokenList.push(entry);
-        TOKEN_ADDRESS_TO_LABEL[tokens[i][1]] = tokens[i][0];
-    }
+  :hover {
+    border: 1px solid
+      ${({ selected, theme }) => (selected ? darken(0.1, theme.mercuryGray) : darken(0.1, theme.royalBlue))};
+  }
 
-    return tokenList.filter(({ address }) => !filteredTokens.includes(address));
-  };
+  :focus {
+    border: 1px solid ${({ theme }) => darken(0.1, theme.royalBlue)};
+  }
 
-  onTokenSelect = (address) => {
-    this.setState({
-      searchQuery: '',
-      isShowingModal: false,
-    });
+  :active {
+    background-color: ${({ theme }) => theme.zumthorBlue};
+  }
+`
 
-    this.props.onCurrencySelected(address);
-  };
+const Aligner = styled.span`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`
 
-  renderTokenList() {
-    const tokens = this.createTokenList();
-    const { loadingExchange, searchQuery } = this.state;
-    const {
-      t,
-      selectedTokens,
-      disableTokenSelect,
-      web3,
-      selectors,
-      account,
-      factoryAddress,
-      exchangeAddresses: { fromToken },
-      addExchange,
-      history,
-    } = this.props;
+const StyledDropDown = styled(DropDown)`
+  margin: 0 0.5rem 0 0.5rem;
+  height: 35%;
 
-    if (loadingExchange) {
-      return (
-        <div className="token-modal__token-row token-modal__token-row--searching">
-          <div className="loader" />
-          <div>Searching for Exchange...</div>
-        </div>
-      );
-    }
+  path {
+    stroke: ${({ selected, theme }) => (selected ? theme.textColor : theme.royalBlue)};
+  }
+`
 
-    if (web3.isAddress(searchQuery)) { // && web3.utils && web3.utils.isAddress(searchQuery)
-      const tokenAddress = searchQuery;
-      const { label } = selectors().getBalance(account, tokenAddress);
+const InputPanel = styled.div`
+  ${({ theme }) => theme.flexColumnNoWrap}
+  box-shadow: 0 4px 8px 0 ${({ theme }) => transparentize(0.95, theme.shadowColor)};
+  position: relative;
+  border-radius: 1.25rem;
+  background-color: ${({ theme }) => theme.inputBackground};
+  z-index: 1;
+`
 
-      //const factory = await web3.contract().at(factoryAddress) //new web3.eth.Contract(FACTORY_ABI, factoryAddress);
+const Container = styled.div`
+  border-radius: 1.25rem;
+  border: 1px solid ${({ error, theme }) => (error ? theme.salmonRed : theme.mercuryGray)};
 
-      web3.contract().at(factoryAddress).then(factory=> {
+  background-color: ${({ theme }) => theme.inputBackground};
+  :focus-within {
+    border: 1px solid ${({ theme }) => theme.malibuBlue};
+  }
+`
 
-        const exchangeAddress = fromToken[tokenAddress];
+const LabelRow = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  align-items: center;
+  color: ${({ theme }) => theme.doveGray};
+  font-size: 0.75rem;
+  line-height: 1rem;
+  padding: 0.75rem 1rem;
+  span:hover {
+    cursor: pointer;
+    color: ${({ theme }) => darken(0.2, theme.doveGray)};
+  }
+`
 
-        if (!exchangeAddress) {
-          this.setState({loadingExchange: true});
-          factory.methods.tokenToExchangeLookup(tokenAddress).call( ).then(data => {
-            if (  data !== '0x0000000000000000000000000000000000000000') {
-              addExchange({ label, tokenAddress, exchangeAddress: data });
-            }
-            this.setState({loadingExchange: false});
-          });
-          return;
-        }
-      })
-    }
+const LabelContainer = styled.div`
+  flex: 1 1 auto;
+  width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+`
 
-    if (disableTokenSelect) {
-      return;
-    }
+const ErrorSpan = styled.span`
+  color: ${({ error, theme }) => error && theme.salmonRed};
+  :hover {
+    cursor: pointer;
+    color: ${({ error, theme }) => error && darken(0.1, theme.salmonRed)};
+  }
+`
 
-    let results;
+const TokenModal = styled.div`
+  ${({ theme }) => theme.flexColumnNoWrap}
+  width: 100%;
+`
 
-    if (!searchQuery) {
-      results = tokens;
+const ModalHeader = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0px 0px 0px 1rem;
+  height: 60px;
+`
+
+const CloseColor = styled(Close)`
+  path {
+    stroke: ${({ theme }) => theme.textColor};
+  }
+`
+
+const CloseIcon = styled.div`
+  position: absolute;
+  right: 1rem;
+  top: 14px;
+  &:hover {
+    cursor: pointer;
+    opacity: 0.6;
+  }
+`
+
+const SearchContainer = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  justify-content: flex-start;
+  padding: 0.5rem 1.5rem;
+  background-color: ${({ theme }) => theme.concreteGray};
+`
+
+const TokenModalInfo = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  align-items: center;
+  padding: 1rem 1.5rem;
+  margin: 0.25rem 0.5rem;
+  justify-content: center;
+  user-select: none;
+`
+
+const TokenList = styled.div`
+  flex-grow: 1;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+`
+
+const TokenModalRow = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  cursor: pointer;
+  user-select: none;
+
+  #symbol {
+    color: ${({ theme }) => theme.doveGrey};
+  }
+
+  :hover {
+    background-color: ${({ theme }) => theme.tokenRowHover};
+  }
+
+  ${({ theme }) => theme.mediaWidth.upToMedium`
+    padding: 0.8rem 1rem;
+    padding-right: 2rem;
+  `}
+`
+
+const TokenRowLeft = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  align-items : center;
+`
+
+const TokenSymbolGroup = styled.div`
+  ${({ theme }) => theme.flexColumnNoWrap};
+  margin-left: 1rem;
+`
+
+const TokenFullName = styled.div`
+  color: ${({ theme }) => theme.chaliceGray};
+`
+
+const FadedSpan = styled.span`
+  color: ${({ theme }) => theme.royalBlue};
+`
+
+const TokenRowBalance = styled.div`
+  font-size: 1rem;
+  line-height: 20px;
+`
+
+const TokenRowUsd = styled.div`
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: ${({ theme }) => theme.chaliceGray};
+`
+
+const TokenRowRight = styled.div`
+  ${({ theme }) => theme.flexColumnNoWrap};
+  align-items: flex-end;
+`
+
+const StyledTokenName = styled.span`
+  margin: 0 0.25rem 0 0.25rem;
+`
+
+const SpinnerWrapper = styled(Spinner)`
+  margin: 0 0.25rem 0 0.25rem;
+  color: ${({ theme }) => theme.chaliceGray};
+  opacity: 0.6;
+`
+
+export default function CurrencyInputPanel({
+  onValueChange = () => {},
+  allBalances,
+  renderInput,
+  onCurrencySelected = () => {},
+  title,
+  description,
+  extraText,
+  extraTextClickHander = () => {},
+  errorMessage,
+  disableUnlock,
+  disableTokenSelect,
+  selectedTokenAddress = '',
+  showUnlock,
+  value,
+  urlAddedTokens,
+  hideETH = false
+}) {
+  const { t } = useTranslation()
+
+  const [modalIsOpen, setModalIsOpen] = useState(false)
+
+  const tokenContract = useTokenContract(selectedTokenAddress)
+  const { exchangeAddress: selectedTokenExchangeAddress, symbol } = useTokenDetails(selectedTokenAddress)
+
+  const pendingApproval = usePendingApproval(selectedTokenAddress)
+
+  const addTransaction = useTransactionAdder()
+
+  const allTokens = useAllTokenDetails()
+
+  const { account } = useWeb3React()
+
+  const userTokenBalance = useAddressBalance(account, selectedTokenAddress)
+
+  function renderUnlockButton() {
+    if (disableUnlock || !showUnlock || selectedTokenAddress === 'TRX' || !selectedTokenAddress) {
+      return null
     } else {
-      const fuse = new Fuse(tokens, FUSE_OPTIONS);
-      results = fuse.search(this.state.searchQuery);
+      if (!pendingApproval) {
+        return (
+          <SubCurrencySelect
+            onClick={async () => {
+              // let estimatedGas
+              let useUserBalance = false
+              /*
+              estimatedGas = await tokenContract.estimate
+                .approve(selectedTokenExchangeAddress, ethers.constants.MaxUint256)
+                .catch(e => {
+                  console.log('Error setting max token approval.')
+                })
+              if (!estimatedGas) {
+                // general fallback for tokens who restrict approval amounts
+                estimatedGas = await tokenContract.estimate.approve(selectedTokenExchangeAddress, userTokenBalance)
+                useUserBalance = true
+              }
+              */
+              // kev: TODO: need fallback for tokens that restrict approval amounts?
+              await tokenContract
+                .approve(selectedTokenExchangeAddress, useUserBalance ? userTokenBalance : ethers.constants.MaxUint256)
+                .send()
+                .then(response => {
+                  console.log({ response })
+                  // kev: TODO : { hash: response }
+                  addTransaction(response, { approval: selectedTokenAddress })
+                })
+                .catch(err => {
+                  console.error('Error during tokenContract.approve() call', err)
+                })
+            }}
+          >
+            {t('unlock')}
+          </SubCurrencySelect>
+        )
+      } else {
+        return <SubCurrencySelect>{t('pending')}</SubCurrencySelect>
+      }
     }
-
-    if (!results.length) { // && web3 && web3.utils && web3.utils.isAddress(searchQuery)
-      const { label } = selectors().getBalance(account, searchQuery);
-      return [
-        <div key="token-modal-no-exchange" className="token-modal__token-row token-modal__token-row--no-exchange">
-          <div>{t("noExchange")}</div>
-        </div>,
-        <div
-          key="token-modal-create-exchange"
-          className="token-modal__token-row token-modal__token-row--create-exchange"
-          onClick={() => {
-            this.setState({ isShowingModal: false });
-            history.push(`/create-exchange/${searchQuery}`);
-          }}
-        >
-          <div>{`Create exchange for ${label}`}</div>
-        </div>
-      ]
-    }
-
-    if (!results.length) {
-      return (
-        <div className="token-modal__token-row token-modal__token-row--no-exchange">
-          <div>{t("noExchange")}</div>
-        </div>
-      )
-    }
-
-    return results.map(({ label, address }) => {
-      const isSelected = selectedTokens.indexOf(address) > -1;
-
-      return (
-        <div
-          key={label}
-          className={
-            classnames('token-modal__token-row', {
-              'token-modal__token-row--selected': isSelected,
-            })
-          }
-          onClick={() => this.onTokenSelect(address)}
-        >
-          <TokenLogo className="token-modal__token-logo" address={address} />
-          <div className="token-modal__token-label" >{label}</div>
-        </div>
-      );
-    });
   }
 
-  renderModal() {
-    if (!this.state.isShowingModal) {
-      return null;
-    }
-
-    return (
-      <Modal onClose={() => this.setState({ isShowingModal: false, searchQuery: '' })}>
-        <CSSTransitionGroup
-          transitionName="token-modal"
-          transitionAppear={true}
-          transitionLeave={true}
-          transitionAppearTimeout={200}
-          transitionLeaveTimeout={200}
-          transitionEnterTimeout={200}
-        >
-          <div className="token-modal">
-            <div className="token-modal__search-container">
-              <input
-                type="text"
-                placeholder={this.props.t("searchOrPaste")}
-                className="token-modal__search-input"
-                onChange={e => {
-                  this.setState({ searchQuery: e.target.value });
-                }}
-              />
-              <img src={SearchIcon} className="token-modal__search-icon" />
-            </div>
-            <div className="token-modal__token-list">
-              {this.renderTokenList()}
-            </div>
-          </div>
-        </CSSTransitionGroup>
-      </Modal>
-    );
-  }
-
-  renderUnlockButton() {
-    const {
-      t,
-      selectors,
-      selectedTokenAddress,
-      account,
-      exchangeAddresses: { fromToken },
-      web3,
-      disableUnlock,
-      transactions,
-      pendingApprovals,
-      value,
-      addApprovalTx,
-      addPendingTx,
-    } = this.props;
-
-    if (disableUnlock || !selectedTokenAddress || selectedTokenAddress === 'TRX') {
-      return;
-    }
-
-    const { value: allowance, decimals, label } = selectors().getApprovals(selectedTokenAddress, account, fromToken[selectedTokenAddress]);
-
-    if (
-      !label ||
-      (
-        allowance.isGreaterThanOrEqualTo(BN((value || 0) * 10 ** decimals)) &&
-        !BN(allowance).isZero()
-      )
-    )  {
-      return;
-    }
-    const approvalTxId = pendingApprovals[selectedTokenAddress];
-    if (approvalTxId && transactions.pending.includes(approvalTxId)) {
-      return (
-        <button
-          className='currency-input-panel__sub-currency-select currency-input-panel__sub-currency-select--pending'
-        >
-          <div className="loader" />
-          {t("pending")}
-        </button>
-      );
-    }
-
-    return (
-      <button
-        className='currency-input-panel__sub-currency-select'
-        onClick={() => {
-          const contract = web3.contract().at(selectedTokenAddress).then(c => {
-          const amount = 0; //BN(10 ** decimals).multipliedBy(10 ** 8).toFixed(0);
-            c.approve(fromToken[selectedTokenAddress], "100000000000000000000000000")
-              .send({ from: account }, (err, data) => {
-                if (!err && data) {
-                  addPendingTx(data);
-                  addApprovalTx({ tokenAddress: selectedTokenAddress, txId: data});
-                }
-              });
-
-          })
-
-        }}
-      >
-        {t("unlock")}
-      </button>
-    );
-  }
-
-  renderInput() {
-    const {
-      t,
-      errorMessage,
-      value,
-      onValueChange,
-      selectedTokenAddress,
-      disableTokenSelect,
-      renderInput,
-    } = this.props;
-
+  function _renderInput() {
     if (typeof renderInput === 'function') {
-      return renderInput();
+      return renderInput()
     }
 
     return (
-      <div className="currency-input-panel__input-row">
-        <input
+      <InputRow>
+        <Input
           type="number"
           min="0"
-          className={classnames('currency-input-panel__input',{
-            'currency-input-panel__input--error': errorMessage,
-          })}
+          step="0.000000000000000001"
+          error={!!errorMessage}
           placeholder="0.0"
           onChange={e => onValueChange(e.target.value)}
           onKeyPress={e => {
-            const charCode = e.which ? e.which : e.keyCode;
+            const charCode = e.which ? e.which : e.keyCode
 
             // Prevent 'minus' character
             if (charCode === 45) {
-              e.preventDefault();
-              e.stopPropagation();
+              e.preventDefault()
+              e.stopPropagation()
             }
           }}
           value={value}
         />
-        { this.renderUnlockButton() }
-        <button
-          className={classnames("currency-input-panel__currency-select", {
-            'currency-input-panel__currency-select--selected': selectedTokenAddress,
-            'currency-input-panel__currency-select--disabled': disableTokenSelect,
-          })}
+        {renderUnlockButton()}
+        <CurrencySelect
+          selected={!!selectedTokenAddress}
           onClick={() => {
             if (!disableTokenSelect) {
-              this.setState({ isShowingModal: true });
+              setModalIsOpen(true)
             }
           }}
         >
-          {
-            selectedTokenAddress
-              ? (
-                <TokenLogo
-                  className="currency-input-panel__selected-token-logo"
-                  address={selectedTokenAddress}
-                />
-              )
-              : null
-          }
-          { TOKEN_ADDRESS_TO_LABEL[selectedTokenAddress] || t("selectToken") }
-          <span className="currency-input-panel__dropdown-icon" />
-        </button>
-      </div>
-    );
-  }
-
-  render() {
-    const {
-      title,
-      description,
-      extraText,
-      errorMessage,
-    } = this.props;
-
-    return (
-      <div className="currency-input-panel">
-        <div className={classnames('currency-input-panel__container', {
-          'currency-input-panel__container--error': errorMessage,
-        })}>
-          <div className="currency-input-panel__label-row">
-            <div className="currency-input-panel__label-container">
-              <span className="currency-input-panel__label">{title}</span>
-              <span className="currency-input-panel__label-description">{description}</span>
-            </div>
-            <span className={classnames('currency-input-panel__extra-text', {
-              'currency-input-panel__extra-text--error': errorMessage,
-            })}>
-              {extraText}
-            </span>
-          </div>
-          {this.renderInput()}
-        </div>
-        {this.renderModal()}
-      </div>
+          <Aligner>
+            {selectedTokenAddress ? <TokenLogo address={selectedTokenAddress} symbol={symbol} /> : null}
+            {
+              <StyledTokenName>
+                {(allTokens[selectedTokenAddress] && allTokens[selectedTokenAddress].symbol) || t('selectToken')}
+              </StyledTokenName>
+            }
+            {!disableTokenSelect && <StyledDropDown selected={!!selectedTokenAddress} />}
+          </Aligner>
+        </CurrencySelect>
+      </InputRow>
     )
   }
+
+  return (
+    <InputPanel>
+      <Container error={!!errorMessage}>
+        <LabelRow>
+          <LabelContainer>
+            <span>{title}</span> <span>{description}</span>
+          </LabelContainer>
+
+          <ErrorSpan
+            data-tip={'Enter max'}
+            error={!!errorMessage}
+            onClick={() => {
+              extraTextClickHander()
+            }}
+          >
+            <Tooltip
+              label="Enter Max"
+              style={{
+                background: 'hsla(0, 0%, 0%, 0.75)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '24px',
+                padding: '0.5em 1em',
+                marginTop: '-64px'
+              }}
+            >
+              <span>{extraText}</span>
+            </Tooltip>
+          </ErrorSpan>
+        </LabelRow>
+        {_renderInput()}
+      </Container>
+      {!disableTokenSelect && (
+        <CurrencySelectModal
+          isOpen={modalIsOpen}
+          onDismiss={() => {
+            setModalIsOpen(false)
+          }}
+          urlAddedTokens={urlAddedTokens}
+          onTokenSelect={onCurrencySelected}
+          allBalances={allBalances}
+          hideETH={hideETH}
+        />
+      )}
+    </InputPanel>
+  )
 }
 
-export default withRouter(
-  connect(
-    state => ({
-      factoryAddress: state.addresses.factoryAddress,
-      exchangeAddresses: state.addresses.exchangeAddresses,
-      tokenAddresses: state.addresses.tokenAddresses,
-      contracts: state.contracts,
-      account: state.web3connect.account,
-      approvals: state.web3connect.approvals,
-      transactions: state.web3connect.transactions,
-      web3: state.web3connect.web3,
-      pendingApprovals: state.pending.approvals,
-    }),
-    dispatch => ({
-      selectors: () => dispatch(selectors()),
-      addExchange: opts => dispatch(addExchange(opts)),
-      addPendingTx: opts => dispatch(addPendingTx(opts)),
-      addApprovalTx: opts => dispatch(addApprovalTx(opts)),
-    }),
-  )(withNamespaces()(CurrencyInputPanel))
-);
+function CurrencySelectModal({ isOpen, onDismiss, onTokenSelect, urlAddedTokens, hideETH }) {
+  const { t } = useTranslation()
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const { exchangeAddress } = useTokenDetails(searchQuery)
+
+  const allTokens = useAllTokenDetails()
+
+  const { account, chainId } = useWeb3React()
+
+  // BigNumber.js instance
+  const ethPrice = useETHPriceInUSD()
+
+  // all balances for both account and exchanges
+  const allBalances = useAllBalances()
+
+  const _usdAmounts = Object.keys(allTokens).map(k => {
+    if (ethPrice && allBalances[account] && allBalances[account][k] && allBalances[account][k].value) {
+      let ethRate = 1 // default for ETH
+      let exchangeDetails = allBalances[allTokens[k].exchangeAddress]
+
+      if (
+        exchangeDetails &&
+        exchangeDetails[k] &&
+        exchangeDetails[k].value &&
+        exchangeDetails['ETH'] &&
+        exchangeDetails['ETH'].value
+      ) {
+        const tokenBalance = new BigNumber(exchangeDetails[k].value)
+        const ethBalance = new BigNumber(exchangeDetails['ETH'].value)
+        ethRate = ethBalance
+          .times(new BigNumber(10).pow(allTokens[k].decimals))
+          .div(tokenBalance)
+          .div(new BigNumber(10).pow(18))
+      }
+      const USDRate = ethPrice.times(ethRate)
+
+      const balanceBigNumber = new BigNumber(allBalances[account][k].value)
+
+      const usdBalance = balanceBigNumber.times(USDRate).div(new BigNumber(10).pow(allTokens[k].decimals))
+      return usdBalance
+    } else {
+      return null
+    }
+  })
+  const usdAmounts =
+    _usdAmounts &&
+    Object.keys(allTokens).reduce(
+      (accumulator, currentValue, i) => Object.assign({ [currentValue]: _usdAmounts[i] }, accumulator),
+      {}
+    )
+
+  const tokenList = useMemo(() => {
+    return Object.keys(allTokens)
+      .sort((a, b) => {
+        if (allTokens[a].symbol && allTokens[b].symbol) {
+          const aSymbol = allTokens[a].symbol.toLowerCase()
+          const bSymbol = allTokens[b].symbol.toLowerCase()
+
+          // pin ETH to top
+          if (aSymbol === 'TRX'.toLowerCase() || bSymbol === 'TRX'.toLowerCase()) {
+            return aSymbol === bSymbol ? 0 : aSymbol === 'TRX'.toLowerCase() ? -1 : 1
+          }
+
+          // then tokens with balance
+          if (usdAmounts[a] && !usdAmounts[b]) {
+            return -1
+          } else if (usdAmounts[b] && !usdAmounts[a]) {
+            return 1
+          }
+
+          // sort by balance
+          if (usdAmounts[a] && usdAmounts[b]) {
+            const aUSD = usdAmounts[a]
+            const bUSD = usdAmounts[b]
+
+            return aUSD.gt(bUSD) ? -1 : aUSD.lt(bUSD) ? 1 : 0
+          }
+
+          // sort alphabetically
+          return aSymbol < bSymbol ? -1 : aSymbol > bSymbol ? 1 : 0
+        } else {
+          return 0
+        }
+      })
+      .map(k => {
+        let balance
+        let usdBalance
+        // only update if we have data
+        if (k === 'TRX' && allBalances[account] && allBalances[account][k] && allBalances[account][k].value) {
+          balance = formatEthBalance(ethers.utils.bigNumberify(allBalances[account][k].value))
+          usdBalance = usdAmounts[k]
+        } else if (allBalances[account] && allBalances[account][k] && allBalances[account][k].value) {
+          balance = formatTokenBalance(ethers.utils.bigNumberify(allBalances[account][k].value), allTokens[k].decimals)
+          usdBalance = usdAmounts[k]
+        }
+        return {
+          name: allTokens[k].name,
+          symbol: allTokens[k].symbol,
+          address: k,
+          balance: balance,
+          usdBalance: usdBalance
+        }
+      })
+  }, [allBalances, allTokens, usdAmounts, account])
+
+  const filteredTokenList = useMemo(() => {
+    const list = tokenList.filter(tokenEntry => {
+      const inputIsAddress = searchQuery.slice(0, 2) === '0x'
+
+      // check the regex for each field
+      const regexMatches = Object.keys(tokenEntry).map(tokenEntryKey => {
+        // if address field only search if input starts with 0x
+        if (tokenEntryKey === 'address') {
+          return (
+            inputIsAddress &&
+            typeof tokenEntry[tokenEntryKey] === 'string' &&
+            !!tokenEntry[tokenEntryKey].match(new RegExp(escapeStringRegex(searchQuery), 'i'))
+          )
+        }
+        return (
+          typeof tokenEntry[tokenEntryKey] === 'string' &&
+          !!tokenEntry[tokenEntryKey].match(new RegExp(escapeStringRegex(searchQuery), 'i'))
+        )
+      })
+      return regexMatches.some(m => m)
+    })
+    // If the user has not inputted anything, preserve previous sort
+    if (searchQuery === '') return list
+    return list.sort((a, b) => {
+      return a.symbol.toLowerCase() === searchQuery.toLowerCase() ? -1 : 1
+    })
+  }, [tokenList, searchQuery])
+
+  function _onTokenSelect(address) {
+    setSearchQuery('')
+    onTokenSelect(address)
+    onDismiss()
+  }
+
+  function renderTokenList() {
+    if (isAddress(searchQuery) && exchangeAddress === undefined) {
+      return <TokenModalInfo>Searching for Exchange...</TokenModalInfo>
+    }
+    if (isAddress(searchQuery) && exchangeAddress === ethers.constants.AddressZero) {
+      return (
+        <>
+          <TokenModalInfo>{t('noExchange')}</TokenModalInfo>
+          <TokenModalInfo>
+            <Link to={`/create-exchange/${searchQuery}`}>{t('createExchange')}</Link>
+          </TokenModalInfo>
+        </>
+      )
+    }
+    if (!filteredTokenList.length) {
+      return <TokenModalInfo>{t('noExchange')}</TokenModalInfo>
+    }
+
+    return filteredTokenList.map(({ address, symbol, name, balance, usdBalance }) => {
+      const urlAdded = urlAddedTokens && urlAddedTokens.hasOwnProperty(address)
+      const customAdded =
+        address !== 'TRX' &&
+        INITIAL_TOKENS_CONTEXT[chainId] &&
+        !INITIAL_TOKENS_CONTEXT[chainId].hasOwnProperty(address) &&
+        !urlAdded
+
+      if (hideETH && address === 'TRX') {
+        return null
+      }
+
+      return (
+        <TokenModalRow key={address} onClick={() => _onTokenSelect(address)}>
+          <TokenRowLeft>
+            <TokenLogo address={address} size={'2rem'} symbol={symbol} />
+            <TokenSymbolGroup>
+              <div>
+                <span id="symbol">{symbol}</span>
+                <FadedSpan>
+                  {urlAdded && '(Added by URL)'} {customAdded && '(Added by user)'}
+                </FadedSpan>
+              </div>
+              <TokenFullName> {name}</TokenFullName>
+            </TokenSymbolGroup>
+          </TokenRowLeft>
+          <TokenRowRight>
+            {balance ? (
+              <TokenRowBalance>{balance && (balance > 0 || balance === '<0.0001') ? balance : '-'}</TokenRowBalance>
+            ) : account ? (
+              <SpinnerWrapper src={Circle} alt="loader" />
+            ) : (
+              '-'
+            )}
+            <TokenRowUsd>
+              {usdBalance && !usdBalance.isNaN()
+                ? usdBalance.isZero()
+                  ? ''
+                  : usdBalance.lt(0.01)
+                  ? '<$0.01'
+                  : '$' + formatToUsd(usdBalance)
+                : ''}
+            </TokenRowUsd>
+          </TokenRowRight>
+        </TokenModalRow>
+      )
+    })
+  }
+
+  // manage focus on modal show
+  const inputRef = useRef()
+
+  function onInput(event) {
+    const input = event.target.value
+    const checksummedInput = isAddress(input)
+    setSearchQuery(checksummedInput || input)
+  }
+
+  function clearInputAndDismiss() {
+    setSearchQuery('')
+    onDismiss()
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onDismiss={clearInputAndDismiss}
+      minHeight={60}
+      maxHeight={50}
+      initialFocusRef={isMobile ? undefined : inputRef}
+    >
+      <TokenModal>
+        <ModalHeader>
+          <p>{t('selectToken')}</p>
+          <CloseIcon onClick={clearInputAndDismiss}>
+            <CloseColor alt={'close icon'} />
+          </CloseIcon>
+        </ModalHeader>
+        <SearchContainer>
+          <img src={SearchIcon} alt="search" />
+          <StyledBorderlessInput
+            ref={inputRef}
+            type="text"
+            placeholder={isMobile ? t('searchOrPasteMobile') : t('searchOrPaste')}
+            onChange={onInput}
+          />
+        </SearchContainer>
+        <TokenList>{renderTokenList()}</TokenList>
+      </TokenModal>
+    </Modal>
+  )
+}

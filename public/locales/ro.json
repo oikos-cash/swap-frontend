@@ -1,5 +1,5 @@
 {
-  "noWallet": "Niciun portofel Tron găsit",
+  "noWallet": "Niciun portofel Ethereum găsit",
   "wrongNetwork": "Nu ești conectat la rețeaua corectă",
   "switchNetwork": "Conectează-te te rog la {{ correctNetwork }}",
   "installWeb3MobileBrowser": "Incearcă să vizitezi această pagina folosind un browser precum Trust Wallet sau Coinbase Wallet.",

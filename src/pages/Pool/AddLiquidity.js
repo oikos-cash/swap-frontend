@@ -1,659 +1,757 @@
-import React, { Component } from 'react';
-import { connect } from 'react-redux';
-import PropTypes from 'prop-types';
-import classnames from "classnames";
-import { withNamespaces } from 'react-i18next';
-import CurrencyInputPanel from '../../components/CurrencyInputPanel';
-import OversizedPanel from '../../components/OversizedPanel';
-import ContextualInfo from '../../components/ContextualInfo';
-import NavigationTabs from '../../components/NavigationTabs';
-import { selectors, addPendingTx } from '../../ducks/web3connect';
-import PlusBlue from '../../assets/images/plus-blue.svg';
-import PlusGrey from '../../assets/images/plus-grey.svg';
-import DropdownBlue from "../../assets/images/dropdown-blue.svg";
-import DropupBlue from "../../assets/images/dropup-blue.svg";
-import { getBlockDeadline } from '../../helpers/web3-utils';
-import { retry } from '../../helpers/promise-utils';
-import ModeSelector from './ModeSelector';
-import {BigNumber as BN} from 'bignumber.js';
-import EXCHANGE_ABI from '../../abi/exchange';
-import "./pool.scss";
-import ReactGA from "react-ga";
+import React, { useReducer, useState, useCallback, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import { createBrowserHistory } from 'history'
+import { ethers } from 'ethers'
+import ReactGA from 'react-ga'
+import styled from 'styled-components'
 
-const INPUT = 0;
-const OUTPUT = 1;
+import { Button } from '../../theme'
+import CurrencyInputPanel from '../../components/CurrencyInputPanel'
+import OversizedPanel from '../../components/OversizedPanel'
+import ContextualInfo from '../../components/ContextualInfo'
+import { ReactComponent as Plus } from '../../assets/images/plus-blue.svg'
+import WarningCard from '../../components/WarningCard'
 
-class AddLiquidity extends Component {
-  static propTypes = {
-    isConnected: PropTypes.bool.isRequired,
-    account: PropTypes.string.isRequired,
-    selectors: PropTypes.func.isRequired,
-    balances: PropTypes.object.isRequired,
-    exchangeAddresses: PropTypes.shape({
-      fromToken: PropTypes.object.isRequired,
-    }).isRequired,
-  };
+import { useWeb3React, useExchangeContract } from '../../hooks'
+import { brokenTokens } from '../../constants'
+import { amountFormatter, calculateGasMargin } from '../../utils'
+import { useTransactionAdder } from '../../contexts/Transactions'
+import { useTokenDetails, INITIAL_TOKENS_CONTEXT } from '../../contexts/Tokens'
+import { useAddressBalance, useExchangeReserves } from '../../contexts/Balances'
+import { useAddressAllowance } from '../../contexts/Allowances'
 
-  state = {
-    inputValue: '',
-    outputValue: '',
-    inputCurrency: 'TRX',
-    outputCurrency: '',
-    lastEditedField: '',
-    totalSupply: BN(0),
-  };
+const { bigNumberify } = ethers.utils
 
-  reset = () => {
-    this.setState({
-      inputValue: '',
-      outputValue: '',
-      lastEditedField: '',
-    });
-  };
+const INPUT = 0
+const OUTPUT = 1
 
-  shouldComponentUpdate(nextProps, nextState) {
-    const { t, isConnected, account, exchangeAddresses, balances, web3 } = this.props;
-    const { inputValue, outputValue, inputCurrency, outputCurrency, lastEditedField } = this.state;
+// denominated in bips
+const ALLOWED_SLIPPAGE = bigNumberify(200)
 
-    return isConnected !== nextProps.isConnected ||
-      t != nextProps.t ||
-      account !== nextProps.account ||
-      exchangeAddresses !== nextProps.exchangeAddresses ||
-      web3 !== nextProps.web3 ||
-      balances !== nextProps.balances ||
-      inputValue !== nextState.inputValue ||
-      outputValue !== nextState.outputValue ||
-      inputCurrency !== nextState.inputCurrency ||
-      outputCurrency !== nextState.outputCurrency ||
-      lastEditedField !== nextState.lastEditedField;
+// denominated in seconds
+const DEADLINE_FROM_NOW = 60 * 15
+
+// denominated in bips
+// const GAS_MARGIN = ethers.utils.bigNumberify(1000)
+
+const BlueSpan = styled.span`
+  color: ${({ theme }) => theme.royalBlue};
+`
+
+const NewExchangeWarning = styled.div`
+  margin-top: 1rem;
+  padding: 1rem;
+
+  border: 1px solid rgba($pizazz-orange, 0.4);
+  background-color: rgba($pizazz-orange, 0.1);
+  border-radius: 1rem;
+`
+
+const NewExchangeWarningText = styled.div`
+  font-size: 0.8rem;
+  line-height: 1rem;
+  text-align: center;
+
+  :first-child {
+    padding-bottom: 0.3rem;
+    font-weight: 500;
   }
+`
 
-  componentWillReceiveProps() {
-    this.recalcForm();
+const LastSummaryText = styled.div`
+  margin-top: 1rem;
+`
+
+const DownArrowBackground = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  justify-content: center;
+  align-items: center;
+`
+const SummaryPanel = styled.div`
+  ${({ theme }) => theme.flexColumnNoWrap}
+  padding: 1rem 0;
+`
+
+const ExchangeRateWrapper = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap};
+  align-items: center;
+  color: ${({ theme }) => theme.doveGray};
+  font-size: 0.75rem;
+  padding: 0.25rem 1rem 0;
+`
+
+const ExchangeRate = styled.span`
+  flex: 1 1 auto;
+  width: 0;
+  color: ${({ theme }) => theme.doveGray};
+`
+
+const Flex = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+
+  button {
+    max-width: 20rem;
   }
+`
 
-  recalcForm = async () => {
-    const {
-      outputCurrency,
-      inputValue,
-      outputValue,
-      lastEditedField,
-      totalSupply: oldTotalSupply,
-    } = this.state;
-    const { exchangeAddresses: { fromToken }, web3 } = this.props;
-    const exchangeAddress = fromToken[outputCurrency];
-    const exchangeRate = this.getExchangeRate();
-    const append = {};
-
-    //console.log("got exchangeAddress", exchangeAddress, "exchangeRate", exchangeRate)
-
-    if (!outputCurrency || this.isNewExchange() || !web3) {
-      return;
-    }
-
-  
-    try {
-      const exchange = await web3.contract().at(exchangeAddress) ; 
-      //console.log("got exchange", exchange);
-      const totalSupply = await exchange.totalSupply().call();
-      if (!oldTotalSupply.isEqualTo(BN(totalSupply))) {
-        append.totalSupply = BN(totalSupply);
-      }
-
-      if (lastEditedField === INPUT) {
-        const newOutputValue = exchangeRate.multipliedBy(inputValue).toFixed(7);
-        if (newOutputValue !== outputValue) {
-          append.outputValue = newOutputValue;
-        }
-      }
-
-      if (lastEditedField === OUTPUT) {
-        const newInputValue = BN(outputValue).dividedBy(exchangeRate).toFixed(7);
-        if (newInputValue !== inputValue) {
-          append.inputValue = newInputValue;
-        }
-      }
-      this.setState(append);
-    }catch (err){
-      console.log("1 - error", err, exchangeAddress)
-    }
-
-
-
-  };
-
-  getBalance(currency) {
-    const { t, selectors, account } = this.props;
-
-    if (!currency) {
-      return '';
-    }
-
-    const { value, decimals } = selectors().getBalance(account, currency);
-    if (!decimals) {
-      return '';
-    }
-
-    const balanceInput = value.dividedBy(10 ** decimals).toFixed(4);
-    return t("balance", { balanceInput });
+const WrappedPlus = ({ isError, highSlippageWarning, ...rest }) => <Plus {...rest} />
+const ColoredWrappedPlus = styled(WrappedPlus)`
+  width: 0.625rem;
+  height: 0.625rem;
+  position: relative;
+  padding: 0.875rem;
+  path {
+    stroke: ${({ active, theme }) => (active ? theme.royalBlue : theme.chaliceGray)};
   }
+`
 
-  isUnapproved() {
-    const { account, exchangeAddresses, selectors } = this.props;
-    const { outputCurrency, outputValue } = this.state;
-
-    if (!outputCurrency) {
-      return false;
-    }
-
-    const { value: allowance, label, decimals } = selectors().getApprovals(
-      outputCurrency,
-      account,
-      exchangeAddresses.fromToken[outputCurrency]
-    );
-
-    if (label && allowance.isLessThan(BN(outputValue * 10 ** decimals || 0))) {
-      return true;
-    }
-
-    return false;
-  }
-
-  onAddLiquidity = async () => {
-    const { account, web3, exchangeAddresses: { fromToken }, selectors } = this.props;
-    const { inputValue, outputValue, outputCurrency } = this.state;
-
-    try {
-      const exchange = await web3.contract().at(fromToken[outputCurrency]);
-      //console.log("got exchange", exchange, "inputValue", inputValue, "outputValue", outputValue);
-
-      const ethAmount = BN(inputValue).multipliedBy(10 ** 6);
-      const { decimals } = selectors().getTokenBalance(outputCurrency, fromToken[outputCurrency]);
-      const tokenAmount = BN(outputValue).multipliedBy(10 ** decimals);
-      const { value: ethReserve } = selectors().getBalance(fromToken[outputCurrency]);
-      const totalLiquidity = await exchange.totalSupply().call();
-      const liquidityMinted = BN(totalLiquidity).multipliedBy(ethAmount.dividedBy(ethReserve));
-      let deadline;
-      try {
-        deadline = await retry(() => getBlockDeadline(web3, 600));
-      } catch(e) {
-        // TODO: Handle error.
-        return;
-      }
-
-      const MAX_LIQUIDITY_SLIPPAGE = 0.025;
-      const minLiquidity = this.isNewExchange() ? BN(0) : liquidityMinted.multipliedBy(1 - MAX_LIQUIDITY_SLIPPAGE);
-      const maxTokens = this.isNewExchange() ? tokenAmount : tokenAmount.multipliedBy(1 + MAX_LIQUIDITY_SLIPPAGE);
-
-      try {
-        exchange.addLiquidity(minLiquidity.toFixed(0),maxTokens.toFixed(0), deadline).send({  
-          from: account,
-          callValue: ethAmount //ethAmount.toFixed(0)
-        }, (err, data) => {
-          this.reset();
-          this.props.addPendingTx(data);
-          if (data) {
-            ReactGA.event({
-              category: 'Pool',
-              action: 'AddLiquidity',
-            });
-          }
-        });
-      } catch (err) {
-        console.error(err);
-      }
-
-
-    }catch (err){
-      console.log("2 - error", err)
-    }
-
-
-  };
-
-  onInputChange = value => {
-    const { inputCurrency, outputCurrency } = this.state;
-    const exchangeRate = this.getExchangeRate();
-    let outputValue;
-
-    if (inputCurrency === 'TRX' && outputCurrency && outputCurrency !== 'TRX') {
-      outputValue = exchangeRate.multipliedBy(value).toFixed(7);
-      //console.log(exchangeRate.toFixed(), "*", value.toString(), "=", outputValue)
-
-    }
-
-    if (outputCurrency === 'TRX' && inputCurrency && inputCurrency !== 'TRX') {
-
-
-      outputValue = BN(value).dividedBy(exchangeRate).toFixed(7);
-
-      //console.log(exchangeRate.toFixed(), "*", value.toString(), "=", outputValue)
-
-
-    }
-
-    const append = {
-      inputValue: value,
-      lastEditedField: INPUT,
-    };
-
-    if (!this.isNewExchange()) {
-      append.outputValue = outputValue;
-    }
-
-    this.setState(append);
-  };
-
-  onOutputChange = value => {
-    const { inputCurrency, outputCurrency } = this.state;
-    const exchangeRate = this.getExchangeRate();
-    let inputValue;
-
-    if (inputCurrency === 'TRX' && outputCurrency && outputCurrency !== 'TRX') {
-      inputValue = BN(value).dividedBy(exchangeRate).toFixed(7);
-    }
-
-    if (outputCurrency === 'TRX' && inputCurrency && inputCurrency !== 'TRX') {
-      inputValue = exchangeRate.multipliedBy(value).toFixed(7);
-    }
-
-    const append = {
-      outputValue: value,
-      lastEditedField: INPUT,
-    };
-
-    if (!this.isNewExchange()) {
-      append.inputValue = inputValue;
-    }
-
-    this.setState(append);
-  };
-
-  isNewExchange() {
-    const { selectors, exchangeAddresses: { fromToken } } = this.props;
-    const { inputCurrency, outputCurrency } = this.state;
-    const eth = [inputCurrency, outputCurrency].filter(currency => currency === 'TRX')[0];
-    const token = [inputCurrency, outputCurrency].filter(currency => currency !== 'TRX')[0];
-
-    if (!eth || !token) {
-      return false;
-    }
-
-    const { value: tokenValue, decimals } = selectors().getBalance(fromToken[token], token);
-    const { value: ethValue } = selectors().getBalance(fromToken[token], eth);
-
-    return tokenValue.isZero() && ethValue.isZero() && decimals !== 0;
-  }
-
-/*
-  getExchangeRate() {
-    const { selectors, exchangeAddresses: { fromToken } } = this.props;
-    const { inputCurrency, outputCurrency } = this.state;
-    const eth = [inputCurrency, outputCurrency].filter(currency => currency === 'TRX')[0];
-    const token = [inputCurrency, outputCurrency].filter(currency => currency !== 'TRX')[0];
-
-    if (!eth || !token) {
-      return;
-    }
-
-    const { value: tokenValue, decimals } = selectors().getBalance(fromToken[token], token);
-    const { value: ethValue } = selectors().getBalance(fromToken[token], eth);
-
-    let x = tokenValue.dividedBy(10 ** decimals).dividedBy(ethValue);
-
-    //console.log("Exchange RATE", tokenValue , "*", (10 ** (18 - decimals)), "/", ethValue, "x", x);
-    console.log(`tokenValue ${tokenValue.toString()} ethValue ${ethValue} decimals ${decimals} rate ${x}`)
-    return x; //tokenValue.multipliedBy(10 ** (18 - decimals)).dividedBy(ethValue);
-  }
-*/
-  getExchangeRate() {
-    const { selectors, exchangeAddresses: { fromToken } } = this.props;
-    const { inputCurrency, outputCurrency } = this.state;
-    const trx = [inputCurrency, outputCurrency].filter(currency => currency === 'TRX')[0];
-    const token = [inputCurrency, outputCurrency].filter(currency => currency !== 'TRX')[0];
-
-    if (!trx || !token) {
-      return;
-    }
-
-    const { value: tokenValue, decimals } = selectors().getBalance(fromToken[token], token);
-    const { value: trxValue } = selectors().getBalance(fromToken[token], trx);
-    console.log(` rate ${tokenValue.dividedBy(10 ** 18).dividedBy(window.tronWeb.fromSun(trxValue))} `)
-    return tokenValue.dividedBy(10 ** 18).dividedBy(window.tronWeb.fromSun(trxValue));
-  }
-
-
-  validate() {
-    const { t, selectors, account } = this.props;
-    const {
-      inputValue, outputValue,
-      inputCurrency, outputCurrency,
-    } = this.state;
-
-    let inputError;
-    let outputError;
-    let isValid = true;
-    const inputIsZero = BN(inputValue).isZero();
-    const outputIsZero = BN(outputValue).isZero();
-
-    if (!inputValue || inputIsZero || !outputValue || outputIsZero || !inputCurrency || !outputCurrency || this.isUnapproved()) {
-      isValid = false;
-    }
-
-    const { value: ethValue } = selectors().getBalance(account, inputCurrency);
-    const { value: tokenValue, decimals } = selectors().getBalance(account, outputCurrency);
-
-    //if (ethValue.isLessThan(BN(inputValue * 10 ** 18))) {
-    //  inputError = t("insufficientBalance");
-    //}
-
-    if (tokenValue.isLessThan(BN(outputValue * 10 ** decimals))) {
-      outputError = t("insufficientBalance");
-    }
-
+function calculateSlippageBounds(value) {
+  if (value) {
+    const offset = value.mul(ALLOWED_SLIPPAGE).div(ethers.utils.bigNumberify(10000))
+    const minimum = value.sub(offset)
+    const maximum = value.add(offset)
     return {
-      inputError,
-      outputError,
-      isValid: isValid && !inputError && !outputError,
-    };
+      minimum: minimum.lt(ethers.constants.Zero) ? ethers.constants.Zero : minimum,
+      maximum: maximum.gt(ethers.constants.MaxUint256) ? ethers.constants.MaxUint256 : maximum
+    }
+  } else {
+    return {}
+  }
+}
+
+function calculateMaxOutputVal(value) {
+  if (value) {
+    return value.mul(ethers.utils.bigNumberify(10000)).div(ALLOWED_SLIPPAGE.add(ethers.utils.bigNumberify(10000)))
+  }
+}
+
+function initialAddLiquidityState(state) {
+  return {
+    inputValue: state.ethAmountURL ? state.ethAmountURL : '',
+    outputValue: state.tokenAmountURL && !state.ethAmountURL ? state.tokenAmountURL : '',
+    lastEditedField: state.tokenAmountURL && state.ethAmountURL === '' ? OUTPUT : INPUT,
+    outputCurrency: state.tokenURL ? state.tokenURL : ''
+  }
+}
+
+function addLiquidityStateReducer(state, action) {
+  switch (action.type) {
+    case 'SELECT_CURRENCY': {
+      return {
+        ...state,
+        outputCurrency: action.payload
+      }
+    }
+    case 'UPDATE_VALUE': {
+      const { inputValue, outputValue } = state
+      const { field, value } = action.payload
+      return {
+        ...state,
+        inputValue: field === INPUT ? value : inputValue,
+        outputValue: field === OUTPUT ? value : outputValue,
+        lastEditedField: field
+      }
+    }
+    case 'UPDATE_DEPENDENT_VALUE': {
+      const { inputValue, outputValue } = state
+      const { field, value } = action.payload
+      return {
+        ...state,
+        inputValue: field === INPUT ? value : inputValue,
+        outputValue: field === OUTPUT ? value : outputValue
+      }
+    }
+    default: {
+      return initialAddLiquidityState()
+    }
+  }
+}
+
+function getExchangeRate(inputValue, inputDecimals, outputValue, outputDecimals, invert = false) {
+  try {
+    if (
+      inputValue &&
+      (inputDecimals || inputDecimals === 0) &&
+      outputValue &&
+      (outputDecimals || outputDecimals === 0)
+    ) {
+      const factor = ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))
+
+      if (invert) {
+        return inputValue
+          .mul(factor)
+          .mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(outputDecimals)))
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(inputDecimals)))
+          .div(outputValue)
+      } else {
+        return outputValue
+          .mul(factor)
+          .mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(inputDecimals)))
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(outputDecimals)))
+          .div(inputValue)
+      }
+    }
+  } catch {}
+}
+
+function getMarketRate(reserveETH, reserveToken, decimals, invert = false) {
+  return getExchangeRate(reserveETH, 6, reserveToken, decimals, invert)
+}
+
+export default function AddLiquidity({ params }) {
+  const { t } = useTranslation()
+  const { library, account, active, chainId } = useWeb3React()
+
+  const urlAddedTokens = {}
+  if (params.token) {
+    urlAddedTokens[params.token] = true
   }
 
-  renderInfo() {
-    const t = this.props.t;
-    const blank = (
-      <div className="pool__summary-panel">
-        <div className="pool__exchange-rate-wrapper">
-          <span className="pool__exchange-rate">{t("exchangeRate")}</span>
-          <span> - </span>
-        </div>
-        <div className="pool__exchange-rate-wrapper">
-          <span className="swap__exchange-rate">{t("currentPoolSize")}</span>
-          <span> - </span>
-        </div>
-        <div className="pool__exchange-rate-wrapper">
-          <span className="swap__exchange-rate">{t("yourPoolShare")}</span>
-          <span> - </span>
-        </div>
-      </div>
-    );
+  // clear url of query
+  useEffect(() => {
+    const history = createBrowserHistory()
+    history.push(window.location.pathname + '')
+  }, [])
 
-    const { selectors, exchangeAddresses: { fromToken }, account } = this.props;
-    const { getBalance } = selectors();
-    const { inputCurrency, outputCurrency, inputValue, outputValue, totalSupply } = this.state;
-    const eth = [inputCurrency, outputCurrency].filter(currency => currency === 'TRX')[0];
-    const token = [inputCurrency, outputCurrency].filter(currency => currency !== 'TRX')[0];
-    const exchangeAddress = fromToken[token];
+  const [addLiquidityState, dispatchAddLiquidityState] = useReducer(
+    addLiquidityStateReducer,
+    { ethAmountURL: params.ethAmount, tokenAmountURL: params.tokenAmount, tokenURL: params.token },
+    initialAddLiquidityState
+  )
+  const { inputValue, outputValue, lastEditedField, outputCurrency } = addLiquidityState
+  const inputCurrency = 'TRX'
 
-    if (!eth || !token || !exchangeAddress) {
-      return blank;
+  const [inputValueParsed, setInputValueParsed] = useState()
+  const [outputValueParsed, setOutputValueParsed] = useState()
+  const [inputError, setInputError] = useState()
+  const [outputError, setOutputError] = useState()
+  const [zeroDecimalError, setZeroDecimalError] = useState()
+
+  const [brokenTokenWarning, setBrokenTokenWarning] = useState()
+
+  const { symbol, decimals, exchangeAddress } = useTokenDetails(outputCurrency)
+  const exchangeContract = useExchangeContract(exchangeAddress)
+
+  const [totalPoolTokens, setTotalPoolTokens] = useState()
+  const fetchPoolTokens = useCallback(async () => {
+    if (exchangeContract) {
+      // console.log({ exchangeContract })
+      try {
+        console.log({ exchangeContract })
+        const totalSupply = await exchangeContract.totalSupply().call()
+        console.log({ totalSupply })
+        setTotalPoolTokens(totalSupply)
+      } catch (err) {
+        console.error('exchangeContract.totalSupply().call() failed')
+        console.error(err)
+      }
     }
+  }, [exchangeContract])
+  useEffect(() => {
+    fetchPoolTokens()
+    library.on('block', fetchPoolTokens)
 
-    const { value: tokenValue, decimals, label } = getBalance(exchangeAddress, token);
-    const { value: ethValue } = getBalance(exchangeAddress);
-    const { value: liquidityBalance } = getBalance(account, exchangeAddress);
-
-    const ownership = liquidityBalance.dividedBy(totalSupply);
-    const ethPer = ethValue.dividedBy(totalSupply);
-    const tokenPer = tokenValue.dividedBy(totalSupply);
-    const ownedEth = ethPer.multipliedBy(liquidityBalance).dividedBy(10 ** 6);
-    const ownedToken = tokenPer.multipliedBy(liquidityBalance).dividedBy(10 ** decimals);
-
-    //ethValue = ethValue;
-
-    //console.log("ownedEth", ownedEth, "ethValue", ethValue )
-
-    if (!label || !decimals) {
-      return blank;
+    return () => {
+      library.removeListener('block', fetchPoolTokens)
     }
+  }, [fetchPoolTokens, library])
 
-    if (this.isNewExchange()) {
-      const rate = BN(outputValue).dividedBy(inputValue);
-      const rateText = rate.isNaN() ? '---' : rate.toFixed(4);
+  const poolTokenBalance = useAddressBalance(account, exchangeAddress)
+  const exchangeETHBalance = useAddressBalance(exchangeAddress, 'TRX')
+  const exchangeTokenBalance = useAddressBalance(exchangeAddress, outputCurrency)
+
+  const { reserveETH, reserveToken } = useExchangeReserves(outputCurrency)
+  /*
+  if (reserveETH) {
+    console.log({ reserveETH: reserveETH.toString(), reserveToken: reserveToken.toString() })
+  } */
+  const isNewExchange = !!(reserveETH && reserveToken && reserveETH.isZero() && reserveToken.isZero())
+
+  // 6 decimals
+  const poolTokenPercentage =
+    poolTokenBalance && totalPoolTokens && isNewExchange === false && !totalPoolTokens.isZero()
+      ? poolTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))).div(totalPoolTokens)
+      : undefined
+  const ethShare =
+    exchangeETHBalance && poolTokenPercentage
+      ? exchangeETHBalance.mul(poolTokenPercentage).div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+      : undefined
+  const tokenShare =
+    exchangeTokenBalance && poolTokenPercentage
+      ? exchangeTokenBalance
+          .mul(poolTokenPercentage)
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+      : undefined
+
+  const liquidityMinted = isNewExchange
+    ? inputValueParsed
+    : totalPoolTokens && inputValueParsed && exchangeETHBalance && !exchangeETHBalance.isZero()
+    ? totalPoolTokens.mul(inputValueParsed).div(exchangeETHBalance)
+    : undefined
+
+  // user balances
+  const inputBalance = useAddressBalance(account, inputCurrency)
+  const outputBalance = useAddressBalance(account, outputCurrency)
+
+  const ethPerLiquidityToken =
+    exchangeETHBalance && totalPoolTokens && isNewExchange === false && !totalPoolTokens.isZero()
+      ? exchangeETHBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))).div(totalPoolTokens)
+      : undefined
+  const tokenPerLiquidityToken =
+    exchangeTokenBalance && totalPoolTokens && isNewExchange === false && !totalPoolTokens.isZero()
+      ? exchangeTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))).div(totalPoolTokens)
+      : undefined
+
+  const outputValueMax = outputValueParsed && calculateSlippageBounds(outputValueParsed).maximum
+  const liquidityTokensMin = liquidityMinted && calculateSlippageBounds(liquidityMinted).minimum
+
+  const marketRate = useMemo(() => {
+    return getMarketRate(reserveETH, reserveToken, decimals)
+  }, [reserveETH, reserveToken, decimals])
+  const marketRateInverted = useMemo(() => {
+    return getMarketRate(reserveETH, reserveToken, decimals, true)
+  }, [reserveETH, reserveToken, decimals])
+
+  function renderTransactionDetails() {
+    const b = text => <BlueSpan>{text}</BlueSpan>
+
+    if (isNewExchange) {
       return (
-        <div className="pool__summary-panel">
-          <div className="pool__exchange-rate-wrapper">
-            <span className="pool__exchange-rate">{t("exchangeRate")}</span>
-            <span>{`1 TRX = ${rateText} ${label}`}</span>
+        <div>
+          <div>
+            {t('youAreAdding')} {b(`${inputValue} TRX`)} {t('and')} {b(`${outputValue} ${symbol}`)} {t('intoPool')}
           </div>
-          <div className="pool__exchange-rate-wrapper">
-            <span className="swap__exchange-rate">{t("currentPoolSize")}</span>
-            <span>{` ${ethValue.dividedBy(10 ** 6).toFixed(2)  } ${eth} + ${tokenValue.dividedBy(10 ** decimals).toFixed(2)} ${label}`}</span>
-          </div>
-          <div className="pool__exchange-rate-wrapper">
-            <span className="swap__exchange-rate">
-              {t("yourPoolShare")} ({ownership.multipliedBy(100).toFixed(2)}%)
-            </span>
-            <span>{`${ownedEth.toFixed(2)} TRX + ${ownedToken.toFixed(2)} ${label}`}</span>
-          </div>
+          <LastSummaryText>
+            {t('youAreSettingExRate')}{' '}
+            {b(
+              `1 TRX = ${amountFormatter(
+                getMarketRate(inputValueParsed, outputValueParsed, decimals),
+                6,
+                4,
+                false
+              )} ${symbol}`
+            )}
+            .
+          </LastSummaryText>
+          <LastSummaryText>
+            {t('youWillMint')} {b(`${inputValue}`)} {t('liquidityTokens')}
+          </LastSummaryText>
+          <LastSummaryText>{t('totalSupplyIs0')}</LastSummaryText>
         </div>
       )
+    } else {
+      return (
+        <>
+          <div>
+            {t('youAreAdding')} {b(`${amountFormatter(inputValueParsed, 6, 4)} TRX`)} {t('and')} {'at most'}{' '}
+            {b(`${amountFormatter(outputValueMax, decimals, Math.min(decimals, 4))} ${symbol}`)} {t('intoPool')}
+          </div>
+          <LastSummaryText>
+            {t('youWillMint')} {b(amountFormatter(liquidityMinted, 6, 4))} {t('liquidityTokens')}
+          </LastSummaryText>
+          <LastSummaryText>
+            {t('totalSupplyIs')} {b(amountFormatter(totalPoolTokens, 6, 4))}
+          </LastSummaryText>
+          <LastSummaryText>
+            {t('tokenWorth')} {b(amountFormatter(ethPerLiquidityToken, 6, 4))} TRX {t('and')}{' '}
+            {b(amountFormatter(tokenPerLiquidityToken, decimals, Math.min(decimals, 4)))} {symbol}
+          </LastSummaryText>
+        </>
+      )
     }
-
-    if (tokenValue.dividedBy(ethValue).isNaN()) {
-      return blank;
-    }
-    //console.log(tokenValue, "/", ethValue);
-
-    return (
-      <div className="pool__summary-panel">
-        <div className="pool__exchange-rate-wrapper">
-          <span className="pool__exchange-rate">{t("exchangeRate")}</span>
-          <span>{`1 TRX = ${tokenValue.dividedBy(10 ** 18).dividedBy(window.tronWeb.fromSun(ethValue)).toFixed(4)} ${label}`}</span>
-        </div>
-        <div className="pool__exchange-rate-wrapper">
-          <span className="swap__exchange-rate">{t("currentPoolSize")}</span>
-          <span>{` ${ethValue.dividedBy(10 ** 6).toFixed(2)} ${eth} + ${tokenValue.dividedBy(10 ** decimals).toFixed(2)} ${label}`}</span>
-        </div>
-        <div className="pool__exchange-rate-wrapper">
-            <span className="swap__exchange-rate">
-            {t("yourPoolShare")} ({ownership.multipliedBy(100).toFixed(2)}%)
-            </span>
-          <span>{`${ownedEth.toFixed(2)} TRX + ${ownedToken.toFixed(2)} ${label}`}</span>
-        </div>
-      </div>
-    )
   }
 
-  renderSummary(inputError, outputError) {
-    const { t, selectors, exchangeAddresses: { fromToken } } = this.props;
-    const {
-      inputValue,
-      outputValue,
-      inputCurrency,
-      outputCurrency,
-    } = this.state;
-    const inputIsZero = BN(inputValue).isZero();
-    const outputIsZero = BN(outputValue).isZero();
-
-    let contextualInfo = '';
-    let isError = false;
-    const { label } = selectors().getTokenBalance(outputCurrency, fromToken[outputCurrency]);
-    if (inputError || outputError) {
-      contextualInfo = inputError || outputError;
-      isError = true;
+  function renderSummary() {
+    let contextualInfo = ''
+    let isError = false
+    if (brokenTokenWarning) {
+      contextualInfo = t('brokenToken')
+      isError = true
+    } else if (zeroDecimalError) {
+      contextualInfo = zeroDecimalError
+    } else if (inputError || outputError) {
+      contextualInfo = inputError || outputError
+      isError = true
     } else if (!inputCurrency || !outputCurrency) {
-      contextualInfo = t("selectTokenCont");
-    } else if (inputCurrency === outputCurrency) {
-      contextualInfo = t("differentToken");
-    } else if (![inputCurrency, outputCurrency].includes('TRX')) {
-      contextualInfo = t("mustBeTRX");
-    } else if (inputIsZero || outputIsZero) {
-      contextualInfo = t("noZero");
-    } else if (this.isUnapproved()) {
-      contextualInfo = t("unlockTokenCont");
-    } else if (!inputValue || !outputValue) {
-      contextualInfo = t("enterCurrencyOrLabelCont", {inputCurrency, label});
+      contextualInfo = t('selectTokenCont')
+    } else if (!inputValue) {
+      contextualInfo = t('enterValueCont')
+    } else if (!account) {
+      contextualInfo = t('noWallet')
+      isError = true
     }
 
     return (
       <ContextualInfo
-        key="context-info"
-        openDetailsText={t("transactionDetails")}
-        closeDetailsText={t("hideDetails")}
+        openDetailsText={t('transactionDetails')}
+        closeDetailsText={t('hideDetails')}
         contextualInfo={contextualInfo}
         isError={isError}
-        renderTransactionDetails={this.renderTransactionDetails}
+        renderTransactionDetails={renderTransactionDetails}
       />
-    );
+    )
   }
 
-  renderTransactionDetails = () => {
-    const { t, selectors, exchangeAddresses: { fromToken }, account } = this.props;
-    const {
-      inputValue,
-      outputValue,
-      outputCurrency,
-      totalSupply,
-    } = this.state;
+  const addTransaction = useTransactionAdder()
 
-    ReactGA.event({
-      category: 'TransactionDetail',
-      action: 'Open',
-    });
+  async function onAddLiquidity() {
+    // take ETH amount, multiplied by ETH rate and 2 for total tx size
+    let ethTransactionSize = (inputValueParsed / 1e6) * 2
 
-    const { value: tokenReserve, decimals, label } = selectors().getTokenBalance(outputCurrency, fromToken[outputCurrency]);
-    const { value: ethReserve } = selectors().getBalance(fromToken[outputCurrency]);
-    const { decimals: poolTokenDecimals } = selectors().getBalance(account, fromToken[outputCurrency]);
+    const deadline = Math.ceil(Date.now() / 1000) + DEADLINE_FROM_NOW
 
-    if (this.isNewExchange()) {
-      return (
-        <div>
-          <div className="pool__summary-item">{t("youAreAdding")} {b(`${inputValue} TRX`)} {t("and")} {b(`${outputValue} ${label}`)} {t("intoPool")}</div>
-          <div className="pool__summary-item">{t("youAreSettingExRate")} {b(`1 TRX = ${BN(outputValue).dividedBy(inputValue).toFixed(4)} ${label}`)}.</div>
-          <div className="pool__summary-item">{t("youWillMint")} {b(`${inputValue}`)} {t("liquidityTokens")}</div>
-          <div className="pool__summary-item">{t("totalSupplyIs0")}</div>
-        </div>
-      );
+    /*
+    const estimatedGasLimit = await exchangeContract.estimate.addLiquidity(
+      isNewExchange ? ethers.constants.Zero : liquidityTokensMin,
+      isNewExchange ? outputValueParsed : outputValueMax,
+      deadline,
+      {
+        value: inputValueParsed
+      }
+    )
+
+    const gasLimit = calculateGasMargin(estimatedGasLimit, GAS_MARGIN)
+    */
+
+    const args = [
+      isNewExchange ? ethers.constants.Zero : liquidityTokensMin,
+      isNewExchange ? outputValueParsed : outputValueMax,
+      deadline
+    ]
+
+    const callValue = inputValueParsed
+    console.log({ args, callValue })
+    exchangeContract
+      .addLiquidity(...args)
+      .send({ callValue })
+      .then(response => {
+        console.log({ response })
+        // log pool added to and total usd amount
+        /*
+        ReactGA.event({
+          category: 'Transaction',
+          action: 'Add Liquidity',
+          label: outputCurrency,
+          value: ethTransactionSize,
+          dimension1: response.hash
+        })
+        ReactGA.event({
+          category: 'Hash',
+          action: response.hash,
+          label: ethTransactionSize.toString()
+        })
+        */
+        addTransaction(response)
+      })
+  }
+
+  function formatBalance(value) {
+    return `Balance: ${value}`
+  }
+
+  useEffect(() => {
+    setBrokenTokenWarning(false)
+    for (let i = 0; i < brokenTokens.length; i++) {
+      if (brokenTokens[i].toLowerCase() === outputCurrency.toLowerCase()) {
+        setBrokenTokenWarning(true)
+      }
+    }
+  }, [outputCurrency])
+
+  useEffect(() => {
+    if (isNewExchange) {
+      setZeroDecimalError()
+      if (inputValue) {
+        const parsedInputValue = ethers.utils.parseUnits(inputValue, 6)
+        setInputValueParsed(parsedInputValue)
+      }
+      if (outputValue) {
+        try {
+          const parsedOutputValue = ethers.utils.parseUnits(outputValue, decimals)
+          console.log({ parsedOutputValue })
+          setOutputValueParsed(parsedOutputValue)
+        } catch {
+          setZeroDecimalError('Invalid input. For 0 decimal tokens only supply whole number token amounts.')
+        }
+      }
+    }
+  }, [decimals, inputValue, isNewExchange, outputValue])
+
+  // parse input value
+  useEffect(() => {
+    if (
+      isNewExchange === false &&
+      inputValue &&
+      marketRate &&
+      lastEditedField === INPUT &&
+      (decimals || decimals === 0)
+    ) {
+      try {
+        const parsedValue = ethers.utils.parseUnits(inputValue, 6)
+
+        if (parsedValue.lte(ethers.constants.Zero) || parsedValue.gte(ethers.constants.MaxUint256)) {
+          throw Error()
+        }
+
+        setInputValueParsed(parsedValue)
+
+        // console.log('marketRate', marketRate.toString())
+        // console.log('input', parsedValue.toString())
+        const currencyAmount = marketRate.mul(parsedValue).mul(bigNumberify(10).pow(bigNumberify(6)))
+
+        // console.log('currencyAmount', currencyAmount.toString())
+        /*
+        const currencyAmount = marketRate
+          .mul(parsedValue)
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(18)))
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(18 - decimals)))
+        */
+
+        setOutputValueParsed(currencyAmount)
+        dispatchAddLiquidityState({
+          type: 'UPDATE_DEPENDENT_VALUE',
+          payload: { field: OUTPUT, value: amountFormatter(currencyAmount, decimals, Math.min(decimals, 4), false) }
+        })
+
+        return () => {
+          setOutputError()
+          setInputValueParsed()
+          setOutputValueParsed()
+          dispatchAddLiquidityState({
+            type: 'UPDATE_DEPENDENT_VALUE',
+            payload: { field: OUTPUT, value: '' }
+          })
+        }
+      } catch (err) {
+        console.error(err)
+        setOutputError(t('inputNotValid'))
+      }
+    }
+  }, [inputValue, isNewExchange, lastEditedField, marketRate, decimals, t])
+
+  // parse output value
+  useEffect(() => {
+    if (
+      isNewExchange === false &&
+      outputValue &&
+      marketRateInverted &&
+      lastEditedField === OUTPUT &&
+      (decimals || decimals === 0)
+    ) {
+      try {
+        const parsedValue = ethers.utils.parseUnits(outputValue, decimals)
+
+        if (parsedValue.lte(ethers.constants.Zero) || parsedValue.gte(ethers.constants.MaxUint256)) {
+          throw Error()
+        }
+
+        setOutputValueParsed(parsedValue)
+
+        const currencyAmount = marketRateInverted
+          .mul(parsedValue)
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(decimals)))
+
+        setInputValueParsed(currencyAmount)
+        dispatchAddLiquidityState({
+          type: 'UPDATE_DEPENDENT_VALUE',
+          payload: { field: INPUT, value: amountFormatter(currencyAmount, 6, 4, false) }
+        })
+
+        return () => {
+          setInputError()
+          setOutputValueParsed()
+          setInputValueParsed()
+          dispatchAddLiquidityState({
+            type: 'UPDATE_DEPENDENT_VALUE',
+            payload: { field: INPUT, value: '' }
+          })
+        }
+      } catch {
+        setInputError(t('inputNotValid'))
+      }
+    }
+  }, [outputValue, isNewExchange, lastEditedField, marketRateInverted, decimals, t])
+
+  // input validation
+  useEffect(() => {
+    if (inputValueParsed && inputBalance) {
+      if (inputValueParsed.gt(inputBalance)) {
+        setInputError(t('insufficientBalance'))
+      } else {
+        setInputError(null)
+      }
     }
 
-    const SLIPPAGE = 0.025;
-    const minOutput = BN(outputValue).multipliedBy(1 - SLIPPAGE);
-    const maxOutput = BN(outputValue).multipliedBy(1 + SLIPPAGE);
-    const minPercentage = minOutput.dividedBy(minOutput.plus(tokenReserve)).multipliedBy(100);
-    const maxPercentage = maxOutput.dividedBy(maxOutput.plus(tokenReserve)).multipliedBy(100);
-    const liquidityMinted = BN(inputValue).multipliedBy(totalSupply.dividedBy(ethReserve));
-    const adjTotalSupply = totalSupply.dividedBy(10 ** 6);
+    if (outputValueMax && outputBalance) {
+      if (outputValueMax.gt(outputBalance)) {
+        setOutputError(t('insufficientBalance'))
+      } else {
+        setOutputError(null)
+      }
+    }
+  }, [inputValueParsed, inputBalance, outputValueMax, outputBalance, t])
 
-    return (
-      <div>
-        <div className="pool__summary-modal__item">{t("youAreAdding")} {b(`${+BN(inputValue).toFixed(7)} TRX`)} {t("and")} {b(`${+minOutput.toFixed(7)} - ${+maxOutput.toFixed(7)} ${label}`)} {t("intoPool")}</div>
-        <div className="pool__summary-modal__item">{t("youWillMint")} {b(+liquidityMinted.toFixed(7))} {t("liquidityTokens")}</div>
-        <div className="pool__summary-modal__item">{t("totalSupplyIs")} {b(+adjTotalSupply.toFixed(7))}</div>
-        <div className="pool__summary-modal__item">{t("tokenWorth")} {b(+ethReserve.dividedBy(totalSupply).toFixed(7))} TRX {t("and")} {b(+tokenReserve.dividedBy(totalSupply).toFixed(7))} {label}</div>
-      </div>
-    );
-  }
+  const allowance = useAddressAllowance(account, outputCurrency, exchangeAddress)
 
-  render() {
-    const {
-      t,
-      isConnected,
-      exchangeAddresses: { fromToken },
-      selectors,
-    } = this.props;
+  const [showUnlock, setShowUnlock] = useState(false)
+  useEffect(() => {
+    console.log({ outputValueParsed, allowance })
+    if (outputValueParsed && allowance) {
+      if (allowance.lt(outputValueParsed)) {
+        setOutputError(t('unlockTokenCont'))
+        setShowUnlock(true)
+      }
+      return () => {
+        setOutputError()
+        setShowUnlock(false)
+      }
+    }
+  }, [outputValueParsed, allowance, t])
 
-    const {
-      inputValue,
-      outputValue,
-      inputCurrency,
-      outputCurrency,
-    } = this.state;
+  const isActive = active && account
+  const isValid =
+    (inputError === null || outputError === null) && !zeroDecimalError && !showUnlock && !brokenTokenWarning
 
-    const { inputError, outputError, isValid } = this.validate();
-    const { label } = selectors().getTokenBalance(outputCurrency, fromToken[outputCurrency]);
+  const newOutputDetected =
+    outputCurrency !== 'TRX' && outputCurrency && !INITIAL_TOKENS_CONTEXT[chainId].hasOwnProperty(outputCurrency)
 
-    return [
-      <div
-        key="content"
-        className={classnames('swap__content', {
-          'swap--inactive': !isConnected,
-        })}
-      >
-        <NavigationTabs
-          className={classnames('header__navigation', {
-            'header--inactive': !isConnected,
-          })}
-        />
+  const [showOutputWarning, setShowOutputWarning] = useState(false)
 
-        {
-          this.isNewExchange()
-            ? (
-              <div className="pool__new-exchange-warning">
-                <div className="pool__new-exchange-warning-text">
-                  🚰 {t("firstLiquidity")}
-                </div>
-                <div className="pool__new-exchange-warning-text">
-                  { t("initialExchangeRate", { label }) }
-                </div>
-              </div>
-            )
-            : null
-        }
-        <ModeSelector title={t("addLiquidity")}/>
-        <CurrencyInputPanel
-          title={t("deposit")}
-          extraText={this.getBalance(inputCurrency)}
-          onValueChange={this.onInputChange}
-          selectedTokenAddress="TRX"
-          value={inputValue}
-          errorMessage={inputError}
-          disableTokenSelect
-        />
-        <OversizedPanel>
-          <div className="swap__down-arrow-background">
-            <img className="swap__down-arrow" src={isValid ? PlusBlue : PlusGrey} />
-          </div>
-        </OversizedPanel>
-        <CurrencyInputPanel
-          title={t("deposit")}
-          description={this.isNewExchange() ? `(${t("estimated")})` : ''}
-          extraText={this.getBalance(outputCurrency)}
-          selectedTokenAddress={outputCurrency}
-          onCurrencySelected={currency => {
-            this.setState({
-              outputCurrency: currency,
-            }, this.recalcForm);
+  useEffect(() => {
+    if (newOutputDetected) {
+      setShowOutputWarning(true)
+    } else {
+      setShowOutputWarning(false)
+    }
+  }, [newOutputDetected, setShowOutputWarning])
+  return (
+    <>
+      {showOutputWarning && (
+        <WarningCard
+          onDismiss={() => {
+            setShowOutputWarning(false)
           }}
-          onValueChange={this.onOutputChange}
-          value={outputValue}
-          errorMessage={outputError}
-          filteredTokens={[ 'TRX' ]}
+          urlAddedTokens={urlAddedTokens}
+          currency={outputCurrency}
         />
-        <OversizedPanel hideBottom>
-          { this.renderInfo() }
-        </OversizedPanel>
-        { this.renderSummary(inputError, outputError) }
-        <div className="pool__cta-container">
-          <button
-            className={classnames('pool__cta-btn', {
-              'swap--inactive': !this.props.isConnected,
-              'pool__cta-btn--inactive': !isValid,
-            })}
-            disabled={!isValid}
-            onClick={this.onAddLiquidity}
-          >
-            {t("addLiquidity")}
-          </button>
-        </div>
-      </div>
-    ];
-  }
-}
-
-export default connect(
-  state => ({
-    isConnected: Boolean(state.web3connect.account) && state.web3connect.networkId == (process.env.REACT_APP_NETWORK_ID||1),
-    account: state.web3connect.account,
-    balances: state.web3connect.balances,
-    web3: state.web3connect.web3,
-    exchangeAddresses: state.addresses.exchangeAddresses,
-  }),
-  dispatch => ({
-    selectors: () => dispatch(selectors()),
-    addPendingTx: id => dispatch(addPendingTx(id)),
-  })
-)(withNamespaces()(AddLiquidity));
-
-function b(text) {
-  return <span className="swap__highlight-text">{text}</span>
+      )}
+      <CurrencyInputPanel
+        title={t('deposit')}
+        extraText={inputBalance && formatBalance(amountFormatter(inputBalance, 6, 4))}
+        onValueChange={inputValue => {
+          dispatchAddLiquidityState({ type: 'UPDATE_VALUE', payload: { value: inputValue, field: INPUT } })
+        }}
+        extraTextClickHander={() => {
+          if (inputBalance) {
+            // TODO: fix this math to match 6 decimals.. parseTron ?
+            const valueToSet = inputBalance.sub(ethers.utils.bigNumberify(100000))
+            if (valueToSet.gt(ethers.constants.Zero)) {
+              dispatchAddLiquidityState({
+                type: 'UPDATE_VALUE',
+                payload: { value: amountFormatter(valueToSet, 6, 6, false), field: INPUT }
+              })
+            }
+          }
+        }}
+        selectedTokenAddress="TRX"
+        value={inputValue}
+        errorMessage={inputError}
+        disableTokenSelect
+      />
+      <OversizedPanel>
+        <DownArrowBackground>
+          <ColoredWrappedPlus active={isActive} alt="plus" />
+        </DownArrowBackground>
+      </OversizedPanel>
+      <CurrencyInputPanel
+        title={t('deposit')}
+        description={isNewExchange ? '' : outputValue ? `(${t('estimated')})` : ''}
+        extraText={
+          outputBalance && decimals && formatBalance(amountFormatter(outputBalance, decimals, Math.min(decimals, 4)))
+        }
+        urlAddedTokens={urlAddedTokens}
+        selectedTokenAddress={outputCurrency}
+        onCurrencySelected={outputCurrency => {
+          dispatchAddLiquidityState({ type: 'SELECT_CURRENCY', payload: outputCurrency })
+        }}
+        onValueChange={outputValue => {
+          dispatchAddLiquidityState({ type: 'UPDATE_VALUE', payload: { value: outputValue, field: OUTPUT } })
+        }}
+        extraTextClickHander={() => {
+          if (outputBalance) {
+            dispatchAddLiquidityState({
+              type: 'UPDATE_VALUE',
+              payload: {
+                value: amountFormatter(calculateMaxOutputVal(outputBalance), decimals, decimals, false),
+                field: OUTPUT
+              }
+            })
+          }
+        }}
+        value={outputValue}
+        showUnlock={showUnlock}
+        errorMessage={outputError}
+      />
+      <OversizedPanel hideBottom>
+        <SummaryPanel>
+          <ExchangeRateWrapper>
+            <ExchangeRate>{t('exchangeRate')}</ExchangeRate>
+            <span>{marketRate ? `1 TRX = ${amountFormatter(marketRate, 6, 4)} ${symbol}` : ' - '}</span>
+          </ExchangeRateWrapper>
+          <ExchangeRateWrapper>
+            <ExchangeRate>{t('currentPoolSize')}</ExchangeRate>
+            <span>
+              {exchangeETHBalance && exchangeTokenBalance
+                ? `${amountFormatter(exchangeETHBalance, 6, 4)} TRX + ${amountFormatter(
+                    exchangeTokenBalance,
+                    decimals,
+                    Math.min(4, decimals)
+                  )} ${symbol}`
+                : ' - '}
+            </span>
+          </ExchangeRateWrapper>
+          <ExchangeRateWrapper>
+            <ExchangeRate>
+              {t('yourPoolShare')} ({exchangeETHBalance && amountFormatter(poolTokenPercentage, 16, 2)}%)
+            </ExchangeRate>
+            <span>
+              {ethShare && tokenShare
+                ? `${amountFormatter(ethShare, 6, 4)} TRX + ${amountFormatter(
+                    tokenShare,
+                    decimals,
+                    Math.min(4, decimals)
+                  )} ${symbol}`
+                : ' - '}
+            </span>
+          </ExchangeRateWrapper>
+        </SummaryPanel>
+      </OversizedPanel>
+      {renderSummary()}
+      {isNewExchange ? (
+        <NewExchangeWarning>
+          <NewExchangeWarningText>
+            <span role="img" aria-label="first-liquidity">
+              🚰
+            </span>{' '}
+            {t('firstLiquidity')}
+          </NewExchangeWarningText>
+          <NewExchangeWarningText style={{ marginTop: '10px' }}>
+            {t('initialExchangeRate', { symbol })}
+          </NewExchangeWarningText>
+        </NewExchangeWarning>
+      ) : null}
+      {isNewExchange && (
+        <NewExchangeWarningText style={{ textAlign: 'center', marginTop: '10px' }}>
+          {t('initialWarning')}
+        </NewExchangeWarningText>
+      )}
+      <Flex>
+        <Button disabled={!isValid} onClick={onAddLiquidity}>
+          {t('addLiquidity')}
+        </Button>
+      </Flex>
+    </>
+  )
 }

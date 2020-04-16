@@ -1,242 +1,157 @@
-import React, { Component } from 'react';
-import { connect } from 'react-redux';
-import PropTypes from 'prop-types';
-import { withRouter } from 'react-router-dom';
-import { withNamespaces } from 'react-i18next';
-import {selectors, addPendingTx} from "../../ducks/web3connect";
-import classnames from "classnames";
-import NavigationTabs from "../../components/NavigationTabs";
-import ModeSelector from "./ModeSelector";
-import AddressInputPanel from "../../components/AddressInputPanel";
-import OversizedPanel from "../../components/OversizedPanel";
-import FACTORY_ABI from "../../abi/factory";
-import {addExchange} from "../../ducks/addresses";
-import ReactGA from "react-ga";
+import React, { useState, useEffect } from 'react'
+import { withRouter } from 'react-router'
+import { createBrowserHistory } from 'history'
+import { ethers } from 'ethers'
+import styled from 'styled-components'
+import { useTranslation } from 'react-i18next'
+import ReactGA from 'react-ga'
 
-class CreateExchange extends Component {
-  static propTypes = {
-    web3: PropTypes.object,
-    selectors: PropTypes.func.isRequired,
-    addExchange: PropTypes.func.isRequired,
-    account: PropTypes.string,
-    isConnected: PropTypes.bool.isRequired,
-    factoryAddress: PropTypes.string.isRequired,
-    exchangeAddresses: PropTypes.shape({
-      fromToken: PropTypes.object.isRequired,
-    }).isRequired,
-  };
+import { useWeb3React, useFactoryContract } from '../../hooks'
+import { Button } from '../../theme'
+import AddressInputPanel from '../../components/AddressInputPanel'
+import OversizedPanel from '../../components/OversizedPanel'
+import { useTokenDetails } from '../../contexts/Tokens'
+import { useTransactionAdder } from '../../contexts/Transactions'
 
-  constructor(props) {
-    super(props);
-    const { match: { params: { tokenAddress } } } = this.props;
+const SummaryPanel = styled.div`
+  ${({ theme }) => theme.flexColumnNoWrap};
+  padding: 1rem 0;
+`
 
-    this.state = {
-      tokenAddress,
-      label: '',
-      decimals: 0,
-    };
+const ExchangeRateWrapper = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap};
+  align-items: center;
+  color: ${({ theme }) => theme.doveGray};
+  font-size: 0.75rem;
+  padding: 0.25rem 1rem 0;
+`
+
+const ExchangeRate = styled.span`
+  flex: 1 1 auto;
+  width: 0;
+  color: ${({ theme }) => theme.doveGray};
+`
+
+const CreateExchangeWrapper = styled.div`
+  color: ${({ theme }) => theme.doveGray};
+  text-align: center;
+  margin-top: 1rem;
+  padding-top: 1rem;
+`
+
+const SummaryText = styled.div`
+  font-size: 0.75rem;
+  color: ${({ error, theme }) => error && theme.salmonRed};
+`
+
+const Flex = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+
+  button {
+    max-width: 20rem;
   }
+`
 
-  validate() {
-    const { tokenAddress } = this.state;
-    const {
-      t,
-      web3,
-      account,
-      selectors,
-      factoryAddress,
-      exchangeAddresses: { fromToken },
-      addExchange,
-    } = this.props;
+function CreateExchange({ location, params }) {
+  const { t } = useTranslation()
+  const { account } = useWeb3React()
 
-    let isValid = true;
-    let errorMessage = '';
+  const factory = useFactoryContract()
 
-    if (!tokenAddress) {
-      return {
-        isValid: false,
-      };
-    }
-      console.log("checking address", tokenAddress, web3.isAddress(tokenAddress))
+  const [tokenAddress, setTokenAddress] = useState({
+    address: params.tokenAddress ? params.tokenAddress : '',
+    name: ''
+  })
+  const [tokenAddressError, setTokenAddressError] = useState()
 
-    if (web3 && !web3.isAddress(tokenAddress) ) { //&&
-      return {
-        isValid: false,
-        errorMessage: t("invalidTokenAddress"),
-      };
-    }
+  const { name, symbol, decimals, exchangeAddress } = useTokenDetails(tokenAddress.address)
+  const addTransaction = useTransactionAdder()
 
-    const { label, decimals } = selectors().getBalance(account, tokenAddress);
-    const factory = new web3.eth.Contract(FACTORY_ABI, factoryAddress);
-    const exchangeAddress = fromToken[tokenAddress];
+  // clear url of query
+  useEffect(() => {
+    const history = createBrowserHistory()
+    history.push(window.location.pathname + '')
+  }, [])
 
-    if (!exchangeAddress) {
-      factory.methods.getExchange(tokenAddress).call((err, data) => {
-        if (!err && data !== '0x0000000000000000000000000000000000000000') {
-          addExchange({ label, tokenAddress, exchangeAddress: data });
-        }
-      });
+  // validate everything
+  const [errorMessage, setErrorMessage] = useState(!account && t('noWallet'))
+  useEffect(() => {
+    if (tokenAddressError) {
+      setErrorMessage(t('invalidTokenAddress'))
+    } else if (symbol === undefined || decimals === undefined || exchangeAddress === undefined) {
+      setErrorMessage()
+    } else if (symbol === null) {
+      setErrorMessage(t('invalidSymbol'))
+    } else if (decimals === null) {
+      setErrorMessage(t('invalidDecimals'))
+    } else if (exchangeAddress !== ethers.constants.AddressZero) {
+      setErrorMessage(t('exchangeExists'))
+    } else if (!account) {
+      setErrorMessage(t('noWallet'))
     } else {
-      errorMessage = t("exchangeExists", { label });
+      setErrorMessage(null)
     }
 
-    if (!label) {
-      errorMessage = t("invalidSymbol");
+    return () => {
+      setErrorMessage()
     }
+  }, [tokenAddress.address, symbol, decimals, exchangeAddress, account, t, tokenAddressError])
 
-    if (!decimals) {
-      errorMessage = t("invalidDecimals");
-    }
+  async function createExchange() {
+    const estimatedGasLimit = await factory.estimate.createExchange(tokenAddress.address)
 
-    return {
-      isValid: isValid && !errorMessage,
-      errorMessage,
-    };
-  }
+    factory.createExchange(tokenAddress.address, { gasLimit: estimatedGasLimit }).then(response => {
+      ReactGA.event({
+        category: 'Transaction',
+        action: 'Create Exchange'
+      })
 
-  onChange = tokenAddress => {
-    const { selectors, account, web3 } = this.props;
-    if (web3 &&  web3.isAddress(tokenAddress)) {
-      const { label, decimals } = selectors().getBalance(account, tokenAddress);
-      this.setState({
-        label,
-        decimals,
-        tokenAddress,
-      });
-    } else {
-      this.setState({
-        label: '',
-        decimals: 0,
-        tokenAddress,
-      });
-    }
-  };
-
-  onCreateExchange = () => {
-    const { tokenAddress } = this.state;
-    const { account, web3, factoryAddress } = this.props;
-
-    if (web3 && !web3.utils.isAddress(tokenAddress)) {  
-      return;
-    }
-    console.log("got factoryAddress", factoryAddress);
-
-    web3.contract().at(factoryAddress).then(factory=> { 
-    factory.methods.createExchange(tokenAddress).send({ from: account }, (err, data) => {
-      if (!err) {
-        this.setState({
-          label: '',
-          decimals: 0,
-          tokenAddress: '',
-        });
-        this.props.addPendingTx(data);
-        ReactGA.event({
-          category: 'Pool',
-          action: 'CreateExchange',
-        });
-      }
+      addTransaction(response)
     })
-  });
-  }
-  
-  renderSummary() {
-    const { tokenAddress } = this.state;
-    const { errorMessage } = this.validate();
-
-    if (!tokenAddress) {
-      return (
-        <div className="create-exchange__summary-panel">
-          <div className="create-exchange__summary-text">{this.props.t("enterTokenCont")}</div>
-        </div>
-      )
-    }
-
-    if (errorMessage) {
-      return (
-        <div className="create-exchange__summary-panel">
-          <div className="create-exchange__summary-text create-exchange--error">{errorMessage}</div>
-        </div>
-      )
-    }
-
-    return null;
   }
 
-  render() {
-    const { tokenAddress } = this.state;
-    const { t, isConnected, account, selectors, web3 } = this.props;
-    const { isValid, errorMessage } = this.validate();
-    let label, decimals;
+  const isValid = errorMessage === null
 
-    if (web3 && web3.isAddress(tokenAddress)) { // && web3.utils.isAddress(tokenAddress)
-      
-      const { label: _label, decimals: _decimals } = selectors().getBalance(account, tokenAddress);
-      label = _label;
-      decimals = _decimals;
-    }
-
-    return (
-      <div
-        key="content"
-        className={classnames('swap__content', {
-          'swap--inactive': !isConnected,
-        })}
-      >
-        <NavigationTabs
-          className={classnames('header__navigation', {
-            'header--inactive': !isConnected,
-          })}
-        />
-        <ModeSelector title={t("createExchange")} />
-        <AddressInputPanel
-          title={t("tokenAddress")}
-          value={tokenAddress}
-          onChange={this.onChange}
-          errorMessage={errorMessage}
-        />
-        <OversizedPanel hideBottom>
-          <div className="pool__summary-panel">
-            <div className="pool__exchange-rate-wrapper">
-              <span className="pool__exchange-rate">{t("label")}</span>
-              <span>{label || ' - '}</span>
-            </div>
-            <div className="pool__exchange-rate-wrapper">
-              <span className="swap__exchange-rate">{t("decimals")}</span>
-              <span>{decimals || ' - '}</span>
-            </div>
-          </div>
-        </OversizedPanel>
-        { this.renderSummary() }
-        <div className="pool__cta-container">
-          <button
-            className={classnames('pool__cta-btn', {
-              'swap--inactive': !isConnected,
-            })}
-            disabled={!isValid}
-            onClick={this.onCreateExchange}
-          >
-            {t("createExchange")}
-          </button>
-        </div>
-      </div>
-    );
-  }
+  return (
+    <>
+      <AddressInputPanel
+        title={t('tokenAddress')}
+        initialInput={
+          params.tokenAddress
+            ? { address: params.tokenAddress }
+            : { address: (location.state && location.state.tokenAddress) || '' }
+        }
+        onChange={setTokenAddress}
+        onError={setTokenAddressError}
+      />
+      <OversizedPanel hideBottom>
+        <SummaryPanel>
+          <ExchangeRateWrapper>
+            <ExchangeRate>{t('name')}</ExchangeRate>
+            <span>{name ? name : ' - '}</span>
+          </ExchangeRateWrapper>
+          <ExchangeRateWrapper>
+            <ExchangeRate>{t('symbol')}</ExchangeRate>
+            <span>{symbol ? symbol : ' - '}</span>
+          </ExchangeRateWrapper>
+          <ExchangeRateWrapper>
+            <ExchangeRate>{t('decimals')}</ExchangeRate>
+            <span>{decimals || decimals === 0 ? decimals : ' - '}</span>
+          </ExchangeRateWrapper>
+        </SummaryPanel>
+      </OversizedPanel>
+      <CreateExchangeWrapper>
+        <SummaryText>{errorMessage ? errorMessage : t('enterTokenCont')}</SummaryText>
+      </CreateExchangeWrapper>
+      <Flex>
+        <Button disabled={!isValid} onClick={createExchange}>
+          {t('createExchange')}
+        </Button>
+      </Flex>
+    </>
+  )
 }
 
-export default withRouter(
-  connect(
-    state => ({
-      isConnected: Boolean(state.web3connect.account) && state.web3connect.networkId == (process.env.REACT_APP_NETWORK_ID||1),
-      account: state.web3connect.account,
-      balances: state.web3connect.balances,
-      web3: state.web3connect.web3,
-      exchangeAddresses: state.addresses.exchangeAddresses,
-      factoryAddress: state.addresses.factoryAddress,
-    }),
-    dispatch => ({
-      selectors: () => dispatch(selectors()),
-      addExchange: opts => dispatch(addExchange(opts)),
-      addPendingTx: id => dispatch(addPendingTx(id)),
-    })
-  )(withNamespaces()(CreateExchange))
-);
+export default withRouter(CreateExchange)

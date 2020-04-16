@@ -1,5 +1,5 @@
 {
-	"noWallet": "No se encontró billetera de Tron",
+	"noWallet": "No se encontró billetera de Ethereum",
 	"wrongNetwork": "Te encontrás en la red equivocada",
 	"switchNetwork": "Por favor cambia a {{ correctNetwork }}",
 	"installWeb3MobileBrowser": "Por favor ingresá desde un navegador móvil con web3 habilitado como Trust Wallet o Coinbase Wallet.",

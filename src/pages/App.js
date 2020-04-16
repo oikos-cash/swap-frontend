@@ -1,74 +1,122 @@
-import React, { Component } from 'react';
-import { connect } from 'react-redux';
-import { BrowserRouter, Redirect, Route, Switch } from 'react-router-dom';
-import MediaQuery from 'react-responsive';
-import { Web3Connect, startWatching, initialize } from '../ducks/web3connect';
-import { setAddresses } from '../ducks/addresses';
-import Header from '../components/Header';
-import Swap from './Swap';
-import Send from './Send';
-import Pool from './Pool';
+import React, { Suspense, lazy } from 'react'
+import styled from 'styled-components'
+import { BrowserRouter, Redirect, Route, Switch } from 'react-router-dom'
 
-import './App.scss';
+import Web3ReactManager from '../components/Web3ReactManager'
+import Header from '../components/Header'
+import Footer from '../components/Footer'
 
-class App extends Component {
-  componentWillMount() {
-    const { initialize, startWatching} = this.props;
-    initialize().then(startWatching);
-  };
+import NavigationTabs from '../components/NavigationTabs'
+import { isAddress, getAllQueryParams } from '../utils'
 
-  componentWillUpdate() {
-    const { web3, setAddresses } = this.props;
-    const networkId = 1;
-    //if (this.hasSetNetworkId || !web3 || !web3.eth || !web3.eth.net || !web3.eth.net.getId) {
-    //  return;
-    //}
+const Swap = lazy(() => import('./Swap'))
+const Send = lazy(() => import('./Send'))
+const Pool = lazy(() => import('./Pool'))
 
-    //web3.eth.net.getId((err, networkId) => {
-      if ( !this.hasSetNetworkId) { //!err &&
-        setAddresses(networkId);
-        this.hasSetNetworkId = true;
-      }
-    //});
-  }
+const AppWrapper = styled.div`
+  display: flex;
+  flex-flow: column;
+  align-items: flex-start;
+  height: 100vh;
+`
 
-  render() {
-    if (!this.props.initialized) {
-      return <noscript />;
-    }
+const HeaderWrapper = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  width: 100%;
+  justify-content: space-between;
+`
+const FooterWrapper = styled.div`
+  width: 100%;
+  min-height: 30px;
+  align-self: flex-end;
+`
 
-    return (
-      <div id="app-container">
-        <MediaQuery query="(min-width: 768px)">
-          <Header />
-        </MediaQuery>
-        <Web3Connect />
-        <BrowserRouter>
-          <Switch>
-            <div className="app__wrapper">
-              <Route exact path="/swap" component={Swap} />
-              <Route exact path="/send" component={Send} />
-              <Route exact path="/add-liquidity" component={Pool} />
-              <Route exact path="/remove-liquidity" component={Pool} />
-              <Route exact path="/create-exchange/:tokenAddress?" component={Pool} />
-              <Redirect exact from="/" to="/swap" />
-            </div>
-          </Switch>
-        </BrowserRouter>
-      </div>
-    );
-  }
+const BodyWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  justify-content: flex-start;
+  align-items: center;
+  flex: 1;
+  overflow: auto;
+`
+
+const Body = styled.div`
+  max-width: 35rem;
+  width: 90%;
+  /* margin: 0 1.25rem 1.25rem 1.25rem; */
+`
+
+export default function App() {
+  const params = getAllQueryParams()
+  return (
+    <>
+      <Suspense fallback={null}>
+        <AppWrapper>
+          <HeaderWrapper>
+            <Header />
+          </HeaderWrapper>
+          <BodyWrapper>
+            <Body>
+              <Web3ReactManager>
+                <BrowserRouter>
+                  <NavigationTabs />
+                  {/* this Suspense is for route code-splitting */}
+                  <Suspense fallback={null}>
+                    <Switch>
+                      <Route exact strict path="/swap" component={() => <Swap params={params} />} />
+                      <Route
+                        exact
+                        strict
+                        path="/swap/:tokenAddress?"
+                        render={({ match, location }) => {
+                          if (isAddress(match.params.tokenAddress)) {
+                            return (
+                              <Swap
+                                location={location}
+                                initialCurrency={isAddress(match.params.tokenAddress)}
+                                params={params}
+                              />
+                            )
+                          } else {
+                            return <Redirect to={{ pathname: '/swap' }} />
+                          }
+                        }}
+                      />
+                      <Route exact strict path="/send" component={() => <Send params={params} />} />
+                      <Route
+                        exact
+                        strict
+                        path="/send/:tokenAddress?"
+                        render={({ match }) => {
+                          if (isAddress(match.params.tokenAddress)) {
+                            return <Send initialCurrency={isAddress(match.params.tokenAddress)} params={params} />
+                          } else {
+                            return <Redirect to={{ pathname: '/send' }} />
+                          }
+                        }}
+                      />
+                      <Route
+                        path={[
+                          '/add-liquidity',
+                          '/remove-liquidity',
+                          '/create-exchange',
+                          '/create-exchange/:tokenAddress?'
+                        ]}
+                        component={() => <Pool params={params} />}
+                      />
+                      <Redirect to="/swap" />
+                    </Switch>
+                  </Suspense>
+                </BrowserRouter>
+              </Web3ReactManager>
+            </Body>
+          </BodyWrapper>
+          <FooterWrapper>
+            <Footer />
+          </FooterWrapper>
+        </AppWrapper>
+      </Suspense>
+    </>
+  )
 }
-
-export default connect(
-  state => ({
-    account: state.web3connect.account,
-    initialized: state.web3connect.initialized,
-    web3: state.web3connect.web3,
-  }),
-  dispatch => ({
-    setAddresses: networkId => dispatch(setAddresses(networkId)),
-    initialize: () => dispatch(initialize()),
-    startWatching: () => dispatch(startWatching()),
-  }),
-)(App);

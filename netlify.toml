@@ -1,22 +1,32 @@
+# block some countries
+[[redirects]]
+  from = "/*"
+  to = "/451.html"
+  status = 451
+  force = true
+  conditions = {Country=["BY","CU","IR","IQ","CI","LR","KP","SD","SY","ZW"]}
+  headers = {Link="<https://uniswap.exchange>"}
+
+# support SPA setup
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
 [build]
-  publish = "build"
+  publish = "build/"
   command = "npm run build"
 
 [build.environment]
-  NODE_OPTIONS = "--max_old_space_size=4096"
   NODE_VERSION = "11.15.0"
   # RUBY_VERSION = "2.6.2"
   REACT_APP_CONTEXT = "production"
-	# GRAPH_API_URL="https://api-shasta.oikos.exchange"
+  REACT_APP_IS_PRODUCTION_DEPLOY = "false"
+  REACT_APP_CHAIN_ID = "2"
+  REACT_APP_NETWORK_URL = "https://ropsten.infura.io/v3/f7077ab1cc3745159abb88d8c26d63c4"
+  REACT_APP_PORTIS_ID = ""
+  REACT_APP_FORTMATIC_KEY = ""
 
-[context.branch-deploy.environment]
-  REACT_APP_CONTEXT = "staging"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    Referrer-Policy = "no-referrer"
-    X-Content-Type-Options = "nosniff"
+#[context.production.environment]
+  #REACT_APP_IS_PRODUCTION_DEPLOY = "true"
 

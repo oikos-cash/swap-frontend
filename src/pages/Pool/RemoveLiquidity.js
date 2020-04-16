@@ -1,434 +1,485 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import classnames from "classnames";
-import { connect } from 'react-redux';
-import { BigNumber as BN } from 'bignumber.js';
-import { withNamespaces } from 'react-i18next';
-import NavigationTabs from "../../components/NavigationTabs";
-import ModeSelector from "./ModeSelector";
-import CurrencyInputPanel from "../../components/CurrencyInputPanel";
-import { selectors, addPendingTx } from '../../ducks/web3connect';
-import ContextualInfo from "../../components/ContextualInfo";
-import OversizedPanel from "../../components/OversizedPanel";
-import ArrowDownBlue from "../../assets/images/arrow-down-blue.svg";
-import ArrowDownGrey from "../../assets/images/arrow-down-grey.svg";
-import { getBlockDeadline } from '../../helpers/web3-utils';
-import { retry } from '../../helpers/promise-utils';
-import EXCHANGE_ABI from "../../abi/exchange";
-import ReactGA from "react-ga";
+import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
+import ReactGA from 'react-ga'
+import { createBrowserHistory } from 'history'
+import { ethers } from 'ethers'
+import styled from 'styled-components'
 
-class RemoveLiquidity extends Component {
-  static propTypes = {
-    account: PropTypes.string,
-    balances: PropTypes.object,
-    web3: PropTypes.object,
-    exchangeAddresses: PropTypes.shape({
-      fromToken: PropTypes.object.isRequired,
-    }).isRequired,
-  };
+import { useWeb3React, useExchangeContract } from '../../hooks'
+import { useTransactionAdder } from '../../contexts/Transactions'
+import { useTokenDetails, INITIAL_TOKENS_CONTEXT } from '../../contexts/Tokens'
+import { useAddressBalance } from '../../contexts/Balances'
 
-  state = {
-    tokenAddress: '',
-    value: '',
-    totalSupply: BN(0),
-  };
+import { calculateGasMargin, amountFormatter } from '../../utils'
+import { brokenTokens } from '../../constants'
 
-  reset() {
-    this.setState({
-      value: '',
-    });
+import { Button } from '../../theme'
+import CurrencyInputPanel from '../../components/CurrencyInputPanel'
+import ContextualInfo from '../../components/ContextualInfo'
+import OversizedPanel from '../../components/OversizedPanel'
+import ArrowDown from '../../assets/svg/SVGArrowDown'
+import WarningCard from '../../components/WarningCard'
+
+// denominated in bips
+const ALLOWED_SLIPPAGE = ethers.utils.bigNumberify(200)
+
+// denominated in seconds
+const DEADLINE_FROM_NOW = 60 * 15
+
+// denominated in bips
+const GAS_MARGIN = ethers.utils.bigNumberify(1000)
+
+const BlueSpan = styled.span`
+  color: ${({ theme }) => theme.royalBlue};
+`
+
+const DownArrowBackground = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  justify-content: center;
+  align-items: center;
+`
+
+const DownArrow = styled(ArrowDown)`
+  ${({ theme }) => theme.flexRowNoWrap}
+  color: ${({ theme, active }) => (active ? theme.royalBlue : theme.doveGray)};
+  width: 0.625rem;
+  height: 0.625rem;
+  position: relative;
+  padding: 0.875rem;
+`
+
+const RemoveLiquidityOutput = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap}
+  min-height: 3.5rem;
+`
+
+const RemoveLiquidityOutputText = styled.div`
+  font-size: 1.25rem;
+  line-height: 1.5rem;
+  padding: 1rem 0.75rem;
+`
+
+const RemoveLiquidityOutputPlus = styled.div`
+  font-size: 1.25rem;
+  line-height: 1.5rem;
+  padding: 1rem 0;
+`
+
+const SummaryPanel = styled.div`
+  ${({ theme }) => theme.flexColumnNoWrap}
+  padding: 1rem 0;
+`
+
+const LastSummaryText = styled.div`
+  margin-top: 1rem;
+`
+
+const ExchangeRateWrapper = styled.div`
+  ${({ theme }) => theme.flexRowNoWrap};
+  align-items: center;
+  color: ${({ theme }) => theme.doveGray};
+  font-size: 0.75rem;
+  padding: 0.25rem 1rem 0;
+`
+
+const ExchangeRate = styled.span`
+  flex: 1 1 auto;
+  width: 0;
+  color: ${({ theme }) => theme.doveGray};
+`
+
+const Flex = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+
+  button {
+    max-width: 20rem;
   }
+`
 
-  validate() {
-    const { tokenAddress, value } = this.state;
-    const { t, account, selectors, exchangeAddresses: { fromToken }, web3 } = this.props;
-    const exchangeAddress = fromToken[tokenAddress];
+function getExchangeRate(inputValue, inputDecimals, outputValue, outputDecimals, invert = false) {
+  try {
+    if (
+      inputValue &&
+      (inputDecimals || inputDecimals === 0) &&
+      outputValue &&
+      (outputDecimals || outputDecimals === 0)
+    ) {
+      const factor = ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))
 
-    if (!web3 || !exchangeAddress || !account || !value) {
-      return {
-        isValid: false,
-      };
-    }
-
-    const { getBalance } = selectors();
-
-    const { value: liquidityBalance, decimals: liquidityDecimals } = getBalance(account, exchangeAddress);
-    console.log("got liquidity", liquidityBalance.toString())
-
-    if (liquidityBalance.isLessThan( BN(value).multipliedBy(10 ** 6))) {
-      return { isValid: false, errorMessage: t("insufficientBalance") };
-    }
-
-    return {
-      isValid: true,
-    };
-  }
-
-  onTokenSelect = async tokenAddress => {
-    const { exchangeAddresses: { fromToken }, web3 } = this.props;
-    const exchangeAddress = fromToken[tokenAddress];
-    this.setState({ tokenAddress });
-
-    if (!web3 || !exchangeAddress) {
-      return;
-    }
-
-    const exchange = await web3.contract().at(exchangeAddress);
-
-    const totalSupply = await exchange.totalSupply().call();
-    this.setState({
-      totalSupply: BN(totalSupply),
-    });
-  };
-
-  onInputChange = value => {
-    this.setState({ value });
-  };
-
-  onRemoveLiquidity = async () => {
-
-    const { tokenAddress, value: input, totalSupply } = this.state;
-    const {
-      exchangeAddresses: { fromToken },
-      web3,
-      selectors,
-      account,
-    } = this.props;
-    const exchangeAddress = fromToken[tokenAddress];
-    const { getBalance } = selectors();
-
-    if (!web3 || !exchangeAddress) {
-      return;
-    }
-
-    const exchange = await web3.contract().at(exchangeAddress);
-    const SLIPPAGE = .02;
-    const { decimals } = getBalance(account, exchangeAddress);
-    const { value: ethReserve } = getBalance(exchangeAddress);
-    const { value: tokenReserve } = getBalance(exchangeAddress, tokenAddress);
-    const amount = BN(input).multipliedBy(10 ** decimals);
-
-    const ownership = amount.dividedBy(totalSupply);
-    const ethWithdrawn = ethReserve.multipliedBy(ownership);
-    const tokenWithdrawn = tokenReserve.multipliedBy(ownership);
-    let deadline;
-
-    try {
-      deadline = await retry(() => getBlockDeadline(web3, 600));
-    } catch(e) {
-      // TODO: Handle error.
-      return;
-    }
-
-    exchange.removeLiquidity(
-      ((amount/(10**18))*(10**6)).toFixed(0),
-      ((ethWithdrawn/(10**18))*(10**6)).toFixed(0),//ethWithdrawn.multipliedBy(1 - SLIPPAGE).toFixed(0),
-      ((tokenWithdrawn/(10**18))*(10**6)).toFixed(0),//tokenWithdrawn.multipliedBy(1 - SLIPPAGE).toFixed(0),
-      deadline,
-    ).send({ from: account }, (err, data) => {
-      if (data) {
-        this.reset();
-
-        this.props.addPendingTx(data);
-        //ReactGA.event({
-        //  category: 'Pool',
-        //  action: 'RemoveLiquidity',
-        //});
+      if (invert) {
+        return inputValue
+          .mul(factor)
+          .mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(outputDecimals)))
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(inputDecimals)))
+          .div(outputValue)
+      } else {
+        return outputValue
+          .mul(factor)
+          .mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(inputDecimals)))
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(outputDecimals)))
+          .div(inputValue)
       }
-    });
-  };
+    }
+  } catch {}
+}
 
-  getBalance = () => {
-    const {
-      exchangeAddresses: { fromToken },
-      account,
-      web3,
-      selectors,
-    } = this.props;
+function getMarketRate(reserveETH, reserveToken, decimals, invert = false) {
+  return getExchangeRate(reserveETH, 6, reserveToken, decimals, invert)
+}
 
-    const { tokenAddress } = this.state;
+function calculateSlippageBounds(value) {
+  if (value) {
+    const offset = value.mul(ALLOWED_SLIPPAGE).div(ethers.utils.bigNumberify(10000))
+    const minimum = value.sub(offset)
+    const maximum = value.add(offset)
+    return {
+      minimum: minimum.lt(ethers.constants.Zero) ? ethers.constants.Zero : minimum,
+      maximum: maximum.gt(ethers.constants.MaxUint256) ? ethers.constants.MaxUint256 : maximum
+    }
+  } else {
+    return {}
+  }
+}
 
-    if (!web3) {
-      return '';
+export default function RemoveLiquidity({ params }) {
+  const { t } = useTranslation()
+  const { library, account, active, chainId } = useWeb3React()
+
+  const addTransaction = useTransactionAdder()
+
+  const [brokenTokenWarning, setBrokenTokenWarning] = useState()
+
+  // clear url of query
+  useEffect(() => {
+    const history = createBrowserHistory()
+    history.push(window.location.pathname + '')
+  }, [])
+
+  const [outputCurrency, setOutputCurrency] = useState(params.poolTokenAddress)
+  const [value, setValue] = useState(params.poolTokenAmount ? params.poolTokenAmount : '')
+  const [inputError, setInputError] = useState()
+  const [valueParsed, setValueParsed] = useState()
+
+  useEffect(() => {
+    setBrokenTokenWarning(false)
+    for (let i = 0; i < brokenTokens.length; i++) {
+      if (brokenTokens[i].toLowerCase() === outputCurrency.toLowerCase()) {
+        setBrokenTokenWarning(true)
+      }
+    }
+  }, [outputCurrency])
+
+  // parse value
+  useEffect(() => {
+    try {
+      const parsedValue = ethers.utils.parseUnits(value, 6)
+      setValueParsed(parsedValue)
+    } catch {
+      if (value !== '') {
+        setInputError(t('inputNotValid'))
+      }
     }
 
-    const exchangeAddress = fromToken[tokenAddress];
-    if (!exchangeAddress) {
-      return '';
+    return () => {
+      setInputError()
+      setValueParsed()
     }
-    const { value, decimals } = selectors().getBalance(account, exchangeAddress);
-    if (!decimals) {
-      return '';
+  }, [t, value])
+
+  const { symbol, decimals, exchangeAddress } = useTokenDetails(outputCurrency)
+
+  const [totalPoolTokens, setTotalPoolTokens] = useState()
+  const poolTokenBalance = useAddressBalance(account, exchangeAddress)
+  const exchangeETHBalance = useAddressBalance(exchangeAddress, 'TRX')
+  const exchangeTokenBalance = useAddressBalance(exchangeAddress, outputCurrency)
+
+  const urlAddedTokens = {}
+  if (params.poolTokenAddress) {
+    urlAddedTokens[params.poolTokenAddress] = true
+  }
+
+  // input validation
+  useEffect(() => {
+    if (valueParsed && poolTokenBalance) {
+      if (valueParsed.gt(poolTokenBalance)) {
+        setInputError(t('insufficientBalance'))
+      } else {
+        setInputError(null)
+      }
     }
+  }, [poolTokenBalance, t, valueParsed])
 
-    if (value.length == 9 )
-      decimals = 6; 
+  const exchange = useExchangeContract(exchangeAddress)
 
-    console.log("got balance", value, "decimals", decimals)
-    return `Balance: ${value.dividedBy(10 ** decimals).toFixed(7)}`;
-  };
+  const ownershipPercentage =
+    poolTokenBalance && totalPoolTokens && !totalPoolTokens.isZero()
+      ? poolTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))).div(totalPoolTokens)
+      : undefined
+  const ownershipPercentageFormatted = ownershipPercentage && amountFormatter(ownershipPercentage, 16, 4)
 
-  renderSummary(errorMessage) {
-    const { t, selectors, exchangeAddresses: { fromToken } } = this.props;
-    const {
-      value: input,
-      tokenAddress,
-    } = this.state;
-    const inputIsZero = BN(input).isZero();
-    let contextualInfo = '';
-    let isError = false;
+  const ETHOwnShare =
+    exchangeETHBalance &&
+    ownershipPercentage &&
+    exchangeETHBalance.mul(ownershipPercentage).div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+  const TokenOwnShare =
+    exchangeTokenBalance &&
+    ownershipPercentage &&
+    exchangeTokenBalance.mul(ownershipPercentage).div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
 
-    if (errorMessage) {
-      contextualInfo = errorMessage;
-      isError = true;
-    } else if (!tokenAddress) {
-      contextualInfo = t("selectTokenCont");
-    } else if (inputIsZero) {
-      contextualInfo = t("noZero");
-    } else if (!input) {
-      const { label } = selectors().getTokenBalance(tokenAddress, fromToken[tokenAddress]);
-      contextualInfo = t("enterLabelCont", { label });
+  const ETHPer = exchangeETHBalance
+    ? exchangeETHBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+    : undefined
+  const tokenPer = exchangeTokenBalance
+    ? exchangeTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+    : undefined
+
+  const ethWithdrawn =
+    ETHPer && valueParsed && totalPoolTokens && !totalPoolTokens.isZero()
+      ? ETHPer.mul(valueParsed)
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+          .div(totalPoolTokens)
+      : undefined
+  const tokenWithdrawn =
+    tokenPer && valueParsed && totalPoolTokens && !totalPoolTokens.isZero()
+      ? tokenPer
+          .mul(valueParsed)
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+          .div(totalPoolTokens)
+      : undefined
+
+  const ethWithdrawnMin = ethWithdrawn ? calculateSlippageBounds(ethWithdrawn).minimum : undefined
+  const tokenWithdrawnMin = tokenWithdrawn ? calculateSlippageBounds(tokenWithdrawn).minimum : undefined
+
+  const fetchPoolTokens = useCallback(() => {
+    if (exchange) {
+      exchange
+        .totalSupply()
+        .call()
+        .then(totalSupply => {
+          setTotalPoolTokens(totalSupply)
+        })
+    }
+  }, [exchange])
+  useEffect(() => {
+    fetchPoolTokens()
+    library.on('block', fetchPoolTokens)
+
+    return () => {
+      library.removeListener('block', fetchPoolTokens)
+    }
+  }, [fetchPoolTokens, library])
+
+  async function onRemoveLiquidity() {
+    // take ETH amount, multiplied by ETH rate and 2 for total tx size
+    let ethTransactionSize = (ethWithdrawn / 1e6) * 2
+
+    const deadline = Math.ceil(Date.now() / 1000) + DEADLINE_FROM_NOW
+
+    /*
+    const estimatedGasLimit = await exchange.estimate.removeLiquidity(
+      valueParsed,
+      ethWithdrawnMin,
+      tokenWithdrawnMin,
+      deadline
+    )
+*/
+    exchange
+      .removeLiquidity(valueParsed, ethWithdrawnMin, tokenWithdrawnMin, deadline)
+      .send()
+      .then(response => {
+        ReactGA.event({
+          category: 'Transaction',
+          action: 'Remove Liquidity',
+          label: outputCurrency,
+          value: ethTransactionSize,
+          dimension1: response.hash
+        })
+        ReactGA.event({
+          category: 'Hash',
+          action: response.hash,
+          label: ethTransactionSize.toString(),
+          value: ethTransactionSize
+        })
+        addTransaction(response)
+      })
+  }
+
+  const b = text => <BlueSpan>{text}</BlueSpan>
+
+  function renderTransactionDetails() {
+    return (
+      <div>
+        <div>
+          {t('youAreRemoving')} {b(`${amountFormatter(ethWithdrawn, 6, 4)} TRX`)} {t('and')}{' '}
+          {b(`${amountFormatter(tokenWithdrawn, decimals, Math.min(decimals, 4))} ${symbol}`)} {t('outPool')}
+        </div>
+        <LastSummaryText>
+          {t('youWillRemove')} {b(amountFormatter(valueParsed, 6, 4))} {t('liquidityTokens')}
+        </LastSummaryText>
+        <LastSummaryText>
+          {t('totalSupplyIs')} {b(amountFormatter(totalPoolTokens, 6, 4))}
+        </LastSummaryText>
+        <LastSummaryText>
+          {t('tokenWorth')} {b(amountFormatter(ETHPer.div(totalPoolTokens), 6, 4))} TRX {t('and')}{' '}
+          {b(amountFormatter(tokenPer.div(totalPoolTokens), decimals, Math.min(4, decimals)))} {symbol}
+        </LastSummaryText>
+      </div>
+    )
+  }
+
+  function renderSummary() {
+    let contextualInfo = ''
+    let isError = false
+    if (brokenTokenWarning) {
+      contextualInfo = t('brokenToken')
+      isError = true
+    } else if (inputError) {
+      contextualInfo = inputError
+      isError = true
+    } else if (!outputCurrency || outputCurrency === 'TRX') {
+      contextualInfo = t('selectTokenCont')
+    } else if (!valueParsed) {
+      contextualInfo = t('enterValueCont')
+    } else if (!account) {
+      contextualInfo = t('noWallet')
+      isError = true
     }
 
     return (
       <ContextualInfo
         key="context-info"
-        openDetailsText={t("transactionDetails")}
-        closeDetailsText={t("hideDetails")}
+        openDetailsText={t('transactionDetails')}
+        closeDetailsText={t('hideDetails')}
         contextualInfo={contextualInfo}
         isError={isError}
-        renderTransactionDetails={this.renderTransactionDetails}
+        renderTransactionDetails={renderTransactionDetails}
       />
-    );
+    )
   }
 
-  renderTransactionDetails = () => {
-    const { tokenAddress, value: input, totalSupply } = this.state;
-    const {
-      t,
-      exchangeAddresses: { fromToken },
-      web3,
-      selectors,
-      account,
-    } = this.props;
-    const exchangeAddress = fromToken[tokenAddress];
-    const { getBalance } = selectors();
+  function formatBalance(value) {
+    return `Balance: ${value}`
+  }
 
-    if (!exchangeAddress) {
-      return null;
+  const isActive = active && account
+  const isValid = inputError === null
+
+  const marketRate = getMarketRate(exchangeETHBalance, exchangeTokenBalance, decimals)
+
+  const newOutputDetected =
+    outputCurrency !== 'TRX' && outputCurrency && !INITIAL_TOKENS_CONTEXT[chainId].hasOwnProperty(outputCurrency)
+
+  const [showCustomTokenWarning, setShowCustomTokenWarning] = useState(false)
+
+  useEffect(() => {
+    if (newOutputDetected) {
+      setShowCustomTokenWarning(true)
+    } else {
+      setShowCustomTokenWarning(false)
     }
+  }, [newOutputDetected])
 
-    ReactGA.event({
-      category: 'TransactionDetail',
-      action: 'Open',
-    });
-
-    const SLIPPAGE = 0.025;
-
-    
-    const { value: liquidityBalance, decimals } = getBalance(account, exchangeAddress);
-    console.log("liquidity  for account", account, "exchangeAddress", exchangeAddress, "liquidityBalance", liquidityBalance);
-
-    const { value: ethReserve } = getBalance(exchangeAddress);
-    const { value: tokenReserve, label, decimals: reserveDecimals } = getBalance(exchangeAddress, tokenAddress);
-
-    const ethPer = ethReserve.dividedBy(totalSupply);
-    const tokenPer = tokenReserve.dividedBy(totalSupply);
-    const ethWithdrawn = ethPer.multipliedBy(input);
-
-    const tokenWithdrawn = tokenPer.multipliedBy(input);
-    const minTokenWithdrawn = tokenWithdrawn.multipliedBy(1 - SLIPPAGE).toFixed(7);
-    const maxTokenWithdrawn = tokenWithdrawn.multipliedBy(1 + SLIPPAGE).toFixed(7);
-
-    const adjTotalSupply = totalSupply.dividedBy(10 ** decimals).minus(input);
-
-    return (
-      <div>
-        <div className="pool__summary-modal__item">{t("youAreRemoving")} {b(`${+BN(ethWithdrawn).toFixed(7)} TRX`)} {t("and")} {b(`${+minTokenWithdrawn} - ${+maxTokenWithdrawn} ${label}`)} {t("outPool")}</div>
-        <div className="pool__summary-modal__item">{t("youWillRemove")} {b(+input)} {t("liquidityTokens")}</div>
-        <div className="pool__summary-modal__item">{t("totalSupplyIs")} {b(+adjTotalSupply.toFixed(7))}</div>
-        <div className="pool__summary-modal__item">{t("tokenWorth")} {b(+ethReserve.dividedBy(totalSupply).toFixed(7))} TRX {t("and")} {b(+tokenReserve.dividedBy(totalSupply).toFixed(7))} {label}</div>
-      </div>
-    );
-  }
-
-  renderOutput() {
-    const {
-      t,
-      exchangeAddresses: { fromToken },
-      account,
-      web3,
-      selectors,
-    } = this.props;
-    const { getBalance } = selectors();
-
-    const { tokenAddress, totalSupply, value: input } = this.state;
-
-    const blank = [
+  return (
+    <>
+      {showCustomTokenWarning && (
+        <WarningCard
+          onDismiss={() => {
+            setShowCustomTokenWarning(false)
+          }}
+          urlAddedTokens={urlAddedTokens}
+          currency={outputCurrency}
+        />
+      )}
       <CurrencyInputPanel
-        key="remove-liquidity-input"
-        title={t("output")}
-        description={`(${t("estimated")})`}
-        renderInput={() => (
-          <div className="remove-liquidity__output"></div>
-        )}
-        disableTokenSelect
-        disableUnlock
-      />,
-      <OversizedPanel key="remove-liquidity-input-under" hideBottom>
-        <div className="pool__summary-panel">
-          <div className="pool__exchange-rate-wrapper">
-            <span className="pool__exchange-rate">{t("exchangeRate")}</span>
-            <span> - </span>
-          </div>
-          <div className="pool__exchange-rate-wrapper">
-            <span className="swap__exchange-rate">{t("currentPoolSize")}</span>
-            <span> - </span>
-          </div>
-          <div className="pool__exchange-rate-wrapper">
-            <span className="swap__exchange-rate">{t("yourPoolShare")}</span>
-            <span> - </span>
-          </div>
-        </div>
+        title={t('poolTokens')}
+        extraText={poolTokenBalance && formatBalance(amountFormatter(poolTokenBalance, 6, 4))}
+        extraTextClickHander={() => {
+          if (poolTokenBalance) {
+            const valueToSet = poolTokenBalance
+            if (valueToSet.gt(ethers.constants.Zero)) {
+              setValue(amountFormatter(valueToSet, 6, 6, false))
+            }
+          }
+        }}
+        urlAddedTokens={urlAddedTokens}
+        onCurrencySelected={setOutputCurrency}
+        onValueChange={setValue}
+        value={value}
+        errorMessage={inputError}
+        selectedTokenAddress={outputCurrency}
+        hideETH={true}
+      />
+      <OversizedPanel>
+        <DownArrowBackground>
+          <DownArrow active={isActive} alt="arrow" />
+        </DownArrowBackground>
       </OversizedPanel>
-    ];
-
-    const exchangeAddress = fromToken[tokenAddress];
-    if (!exchangeAddress || !web3) {
-      return blank;
-    }
-
-    const { value: liquidityBalance } = getBalance(account, exchangeAddress);
-    const { value: ethReserve } = getBalance(exchangeAddress);
-    const { value: tokenReserve, decimals: tokenDecimals, label } = getBalance(exchangeAddress, tokenAddress);
-
-    if (!tokenDecimals) {
-      return blank;
-    }
-
-    const ownership = liquidityBalance.dividedBy(totalSupply);
-    const ethPer = ethReserve.dividedBy(totalSupply);
-    const tokenPer = tokenReserve.multipliedBy(10 ** (18 - tokenDecimals)).dividedBy(totalSupply);
-    //const exchangeRate = tokenReserve.multipliedBy(10 ** (18 - tokenDecimals)).div(ethReserve.dividedBy(10**6));
-
-    const exchangeRate = tokenReserve.div(10 ** tokenDecimals).div(ethReserve.dividedBy(10**6));
-
-    console.log("Exchange RATE", tokenReserve.toFixed() , "*", (10 ** (18 - tokenDecimals)), "/", ethReserve.toFixed(), "exRate", exchangeRate.toFixed());
-
-    const ownedEth = ethPer.multipliedBy(liquidityBalance).dividedBy(10 ** 6);
-    const ownedToken = tokenPer.multipliedBy(liquidityBalance).dividedBy(10 ** tokenDecimals);
-
-    return [
       <CurrencyInputPanel
-        title={t("output")}
-        description={`(${t("estimated")})`}
+        title={t('output')}
+        description={!!(ethWithdrawn && tokenWithdrawn) ? `(${t('estimated')})` : ''}
         key="remove-liquidity-input"
-        renderInput={() => input
-          ? (
-            <div className="remove-liquidity__output">
-              <div className="remove-liquidity__output-text">
-                {`${ethPer.multipliedBy(input).toFixed(3)} TRX`}
-              </div>
-              <div className="remove-liquidity__output-plus"> + </div>
-              <div className="remove-liquidity__output-text">
-                {`${tokenPer.multipliedBy(input).toFixed(3)} ${label}`}
-              </div>
-            </div>
+        renderInput={() =>
+          !!(ethWithdrawn && tokenWithdrawn) ? (
+            <RemoveLiquidityOutput>
+              <RemoveLiquidityOutputText>
+                {`${amountFormatter(ethWithdrawn, 6, 4, false)} TRX`}
+              </RemoveLiquidityOutputText>
+              <RemoveLiquidityOutputPlus> + </RemoveLiquidityOutputPlus>
+              <RemoveLiquidityOutputText>
+                {`${amountFormatter(tokenWithdrawn, decimals, Math.min(4, decimals))} ${symbol}`}
+              </RemoveLiquidityOutputText>
+            </RemoveLiquidityOutput>
+          ) : (
+            <RemoveLiquidityOutput />
           )
-          : <div className="remove-liquidity__output" />
         }
         disableTokenSelect
         disableUnlock
-      />,
+      />
       <OversizedPanel key="remove-liquidity-input-under" hideBottom>
-        <div className="pool__summary-panel">
-          <div className="pool__exchange-rate-wrapper">
-            <span className="pool__exchange-rate">{t("exchangeRate")}</span>
-            <span>
-              {`1 TRX = ${exchangeRate.toFixed(4)} ${label}`}
-            </span>
-          </div>
-          <div className="pool__exchange-rate-wrapper">
-            <span className="swap__exchange-rate">{t("currentPoolSize")}</span>
-            <span>{`${ethReserve.dividedBy(10 ** 6).toFixed(2)} TRX + ${tokenReserve.dividedBy(10 ** tokenDecimals).toFixed(2)} ${label}`}</span>
-          </div>
-          <div className="pool__exchange-rate-wrapper">
-            <span className="swap__exchange-rate">
-              {t("yourPoolShare")} ({ownership.multipliedBy(100).toFixed(2)}%)
-            </span>
-            <span>{`${ownedEth.toFixed(2)} TRX + ${ownedToken.toFixed(2)} ${label}`}</span>
-          </div>
-        </div>
+        <SummaryPanel>
+          <ExchangeRateWrapper>
+            <ExchangeRate>{t('exchangeRate')}</ExchangeRate>
+            {marketRate ? <span>{`1 TRX = ${amountFormatter(marketRate, 6, 4)} ${symbol}`}</span> : ' - '}
+          </ExchangeRateWrapper>
+          <ExchangeRateWrapper>
+            <ExchangeRate>{t('currentPoolSize')}</ExchangeRate>
+            {exchangeETHBalance && exchangeTokenBalance && (decimals || decimals === 0) ? (
+              <span>{`${amountFormatter(exchangeETHBalance, 6, 4)} TRX + ${amountFormatter(
+                exchangeTokenBalance,
+                decimals,
+                Math.min(decimals, 4)
+              )} ${symbol}`}</span>
+            ) : (
+              ' - '
+            )}
+          </ExchangeRateWrapper>
+          <ExchangeRateWrapper>
+            <ExchangeRate>
+              {t('yourPoolShare')} ({ownershipPercentageFormatted && ownershipPercentageFormatted}%)
+            </ExchangeRate>
+            {ETHOwnShare && TokenOwnShare ? (
+              <span>
+                {`${amountFormatter(ETHOwnShare, 6, 4)} TRX + ${amountFormatter(
+                  TokenOwnShare,
+                  decimals,
+                  Math.min(decimals, 4)
+                )} ${symbol}`}
+              </span>
+            ) : (
+              ' - '
+            )}
+          </ExchangeRateWrapper>
+        </SummaryPanel>
       </OversizedPanel>
-    ];
-  }
-
-  render() {
-    const { t, isConnected } = this.props;
-    const { tokenAddress, value } = this.state;
-    const { isValid, errorMessage } = this.validate();
-
-    return [
-      <div
-        key="content"
-        className={classnames('swap__content', {
-          'swap--inactive': !isConnected,
-        })}
-      >
-        <NavigationTabs
-          className={classnames('header__navigation', {
-            'header--inactive': !isConnected,
-          })}
-        />
-        <ModeSelector title={t("removeLiquidity")} />
-        <CurrencyInputPanel
-          title={t("poolTokens")}
-          extraText={this.getBalance(tokenAddress)}
-          onValueChange={this.onInputChange}
-          value={value}
-          errorMessage={errorMessage}
-          selectedTokenAddress={tokenAddress}
-          onCurrencySelected={this.onTokenSelect}
-          filteredTokens={['TRX']}
-        />
-        <OversizedPanel>
-          <div className="swap__down-arrow-background">
-            <img className="swap__down-arrow" src={isValid ? ArrowDownBlue : ArrowDownGrey} />
-          </div>
-        </OversizedPanel>
-        { this.renderOutput() }
-        { this.renderSummary(errorMessage) }
-        <div className="pool__cta-container">
-          <button
-            className={classnames('pool__cta-btn', {
-              'swap--inactive': !isConnected,
-              'pool__cta-btn--inactive': !isValid,
-            })}
-            disabled={!isValid}
-            onClick={this.onRemoveLiquidity}
-          >
-            {t("removeLiquidity")}
-          </button>
-        </div>
-      </div>
-    ];
-  }
-}
-
-export default connect(
-  state => ({
-    isConnected: Boolean(state.web3connect.account) && state.web3connect.networkId == (process.env.REACT_APP_NETWORK_ID||1),
-    web3: state.web3connect.web3,
-    balances: state.web3connect.balances,
-    account: state.web3connect.account,
-    exchangeAddresses: state.addresses.exchangeAddresses,
-  }),
-  dispatch => ({
-    selectors: () => dispatch(selectors()),
-    addPendingTx: id => dispatch(addPendingTx(id)),
-  })
-)(withNamespaces()(RemoveLiquidity));
-
-function b(text) {
-  return <span className="swap__highlight-text">{text}</span>
+      {renderSummary()}
+      <Flex>
+        <Button disabled={!isValid} onClick={onRemoveLiquidity}>
+          {t('removeLiquidity')}
+        </Button>
+      </Flex>
+    </>
+  )
 }
