@@ -70,6 +70,7 @@ const MAINNET_WALLETS = {
     color: '#010101',
     primary: true
   },
+  /*
   METAMASK: {
     connector: injected,
     name: 'MetaMask',
@@ -78,6 +79,7 @@ const MAINNET_WALLETS = {
     href: null,
     color: '#E8831D'
   },
+  */
   TRONLINK: {
     connector: injected, // todo
     name: 'TronLink',
@@ -92,7 +94,8 @@ export const SUPPORTED_WALLETS =
   process.env.REACT_APP_CHAIN_ID !== '1'
     ? MAINNET_WALLETS
     : {
-        ...MAINNET_WALLETS,
+        ...MAINNET_WALLETS
+        /*
         ...{
           WALLET_CONNECT: {
             connector: walletconnect,
@@ -156,6 +159,7 @@ export const SUPPORTED_WALLETS =
             mobile: true
           }
         }
+        */
       }
 
 // list of tokens that lock fund on adding liquidity - used to disable button
