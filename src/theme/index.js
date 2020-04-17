@@ -70,7 +70,7 @@ const theme = darkMode => ({
   charcoalBlack: darkMode ? '#F2F2F2' : '#404040',
   // blues
   zumthorBlue: darkMode ? '#212529' : '#EBF4FF',
-  malibuBlue: darkMode ? '#E67AEF' : '#5CA2FF',
+  malibuBlue: darkMode ? '#46bf89' : '#5CA2FF',
   royalBlue: darkMode ? '#46bf89' : '#2F80ED',
   loadingBlue: darkMode ? '#e4f0ff' : '#e4f0ff',
   
@@ -94,7 +94,7 @@ const theme = darkMode => ({
   textHover: darkMode ? theme.uniswapPink : theme.doveGray,
 
   // connect button when loggedout
-  buttonFaded: darkMode ? '#DC6BE5' : '#737373',
+  buttonFaded: darkMode ? '#46bf89' : '#737373',
 
   // media queries
   mediaWidth: mediaWidthTemplates,
