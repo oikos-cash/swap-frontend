@@ -31,7 +31,7 @@ export const INITIAL_TOKENS_CONTEXT = {
     }
   },
   2: Object.keys(addresses.exchanges)
-    .filter(symbol => ['sUSD', 'OKS'].includes(symbol))
+    .filter(symbol => ['sUSD', 'sTRX', 'OKS'].includes(symbol))
     .map(symbol => {
       const { address, tokenAddress } = addresses.exchanges[symbol]
       return [
