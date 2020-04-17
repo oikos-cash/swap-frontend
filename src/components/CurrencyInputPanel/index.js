@@ -332,8 +332,13 @@ export default function CurrencyInputPanel({
               }
               */
               // kev: TODO: need fallback for tokens that restrict approval amounts?
+
+              /*
               await tokenContract
                 .approve(selectedTokenExchangeAddress, useUserBalance ? userTokenBalance : ethers.constants.MaxUint256)
+              */
+              await tokenContract
+                .approve(selectedTokenExchangeAddress, ethers.constants.MaxUint256)
                 .send()
                 .then(response => {
                   console.log({ response })
