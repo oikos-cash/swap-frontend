@@ -55,7 +55,10 @@ const Logo = styled.img`
   content:url("${({ theme }) => theme.logoImg}");
   height:36px;
 `
-
+const LogoTitle = styled.h1`
+  color: ${({ theme }) => theme.logoTitle};
+  font-size: 18px;
+`
  
 export default function Header() {
   return (
@@ -70,9 +73,7 @@ export default function Header() {
             </Link>
           </Nod>
           <Link id="link" href="/" style={{ marginLeft: '20px' }}>
-            <h1 id="title" style={{ color: '#000' }}>
-              SWAP
-            </h1>
+            <LogoTitle>SWAP</LogoTitle>
           </Link>
         </Title>
       </HeaderElement>
