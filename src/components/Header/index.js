@@ -51,7 +51,12 @@ const Title = styled.div`
     }
   }
 `
+const Logo = styled.img`
+  content:url("${({ theme }) => theme.logoImg}");
+  height:36px;
+`
 
+ 
 export default function Header() {
   return (
     <HeaderFrame>
@@ -59,9 +64,9 @@ export default function Header() {
         <Title>
           <Nod>
             <Link id="link" href="/">
-              <span role="img" aria-label="logo">
-                <img src="oikos-logo.svg" height="36px" alt="Oikos Swap" />
-              </span>
+            <span role="img" aria-label="logo">
+                <Logo></Logo>
+            </span>
             </Link>
           </Nod>
           <Link id="link" href="/" style={{ marginLeft: '20px' }}>

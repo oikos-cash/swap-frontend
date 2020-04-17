@@ -48,6 +48,7 @@ const theme = darkMode => ({
 
   // for setting css on <html>
   backgroundColor: darkMode ? '#333639' : white,
+  logoImg: darkMode ? 'oikos-logo-dark.svg' : 'oikos-logo.svg',
 
   modalBackground: darkMode ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.5)',
   inputBackground: darkMode ? '#202124' : white,
@@ -72,7 +73,7 @@ const theme = darkMode => ({
   malibuBlue: darkMode ? '#E67AEF' : '#5CA2FF',
   royalBlue: darkMode ? '#DC6BE5' : '#2F80ED',
   loadingBlue: darkMode ? '#e4f0ff' : '#e4f0ff',
-
+  
   // purples
   wisteriaPurple: '#DC6BE5',
   // reds
