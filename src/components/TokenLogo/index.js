@@ -39,7 +39,9 @@ export default function TokenLogo({ address, size = '1rem', symbol = '', ...rest
     return <StyledEthereumLogo size={size} />
   } else if (symbol.startsWith('s') || symbol === 'OKS') {
     // snx token
-    path = `https://raw.githubusercontent.com/oikos-cash/exchange/master/public/images/synths/${symbol}-icon.svg`
+    path = `https://oikos.exchange/images/synths/${symbol}-icon.svg`
+    // path = `https://raw.githubusercontent.com/oikos-cash/exchange/master/public/images/synths/${symbol}-icon.svg`
+    // gettin CORB error on github raw...
   } else if (!error && !BAD_IMAGES[address]) {
     path = TOKEN_ICON_API(address.toLowerCase())
   } else {
