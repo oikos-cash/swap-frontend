@@ -25,7 +25,7 @@ const Web3ProviderNetwork = createWeb3ReactRoot(NetworkContextName)
 function getLibrary(provider_) {
   let provider = provider_
   if (!provider || !provider.trx) {
-    provider = createTronWeb()
+    provider = window.tronWeb || createTronWeb()
   }
   const tronWeb = provider
   const getBlockNumber = async () => {
