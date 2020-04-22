@@ -7,8 +7,8 @@ import addresses from '@oikos/swap/addresses.json'
 const toEthAddress = str => `0x${str.slice(2)}`
 
 export const FACTORY_ADDRESSES = {
-  1: 'TODO: mainnet not launched yet',
-  2: toEthAddress(addresses.factory)
+  1: toEthAddress(addresses.mainnet.factory),
+  2: toEthAddress(addresses.shasta.factory)
 }
 
 export const SUPPORTED_THEMES = {
@@ -21,19 +21,13 @@ export const SYMBOL = 'symbol'
 export const DECIMALS = 'decimals'
 export const EXCHANGE_ADDRESS = 'exchangeAddress'
 
-export const INITIAL_TOKENS_CONTEXT = {
-  1: {
-    '0x5e74C9036fb86BD7eCdcb084a0673EFc32eA31cb': {
-      [NAME]: 'MAINNET: TODO Synth sETH',
-      [SYMBOL]: 'sETH',
-      [DECIMALS]: 18,
-      [EXCHANGE_ADDRESS]: '0xe9Cf7887b93150D4F2Da7dFc6D502B216438F244'
-    }
-  },
-  2: Object.keys(addresses.exchanges)
-    .filter(symbol => ['sUSD', 'sTRX', 'OKS'].includes(symbol))
+const synthWhitelist = ['sUSD', 'sTRX', 'OKS']
+
+const buildTokens = addrs => {
+  return Object.keys(addrs.exchanges)
+    .filter(symbol => synthWhitelist.includes(symbol))
     .map(symbol => {
-      const { address, tokenAddress } = addresses.exchanges[symbol]
+      const { address, tokenAddress } = addrs.exchanges[symbol]
       return [
         toEthAddress(tokenAddress),
         {
@@ -47,6 +41,11 @@ export const INITIAL_TOKENS_CONTEXT = {
     .reduce((acc, [tokenAddress, obj]) => {
       return { ...acc, [tokenAddress]: obj }
     }, {})
+}
+
+export const INITIAL_TOKENS_CONTEXT = {
+  1: buildTokens(addresses.mainnet),
+  2: buildTokens(addresses.shasta)
   /*
   2: {
     '0x056c4b3c825e6220784a640945e11a563f129722': {
