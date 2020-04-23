@@ -19,7 +19,8 @@ export const network = new NetworkConnector({
 })
 
 export const injected = new TronLinkConnector({
-  supportedChainIds: [Number(process.env.REACT_APP_CHAIN_ID)]
+  //supportedChainIds: [Number(process.env.REACT_APP_CHAIN_ID)]
+  supportedChainIds: [1, 2]
 })
 
 // mainnet only

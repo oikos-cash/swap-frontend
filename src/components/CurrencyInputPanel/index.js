@@ -464,6 +464,7 @@ function CurrencySelectModal({ isOpen, onDismiss, onTokenSelect, urlAddedTokens,
   const allTokens = useAllTokenDetails()
 
   const { account, chainId } = useWeb3React()
+  console.log({ chainId })
 
   // BigNumber.js instance
   const ethPrice = useETHPriceInUSD()
