@@ -22,10 +22,12 @@ export const DECIMALS = 'decimals'
 export const EXCHANGE_ADDRESS = 'exchangeAddress'
 
 const synthWhitelist = ['sUSD', 'sTRX', 'OKS']
+const otherTokensWhitelist = ['USDJ', 'JST']
 
+const exchangeWhitelist = [...synthWhitelist, ...otherTokensWhitelist]
 const buildTokens = addrs => {
   return Object.keys(addrs.exchanges)
-    .filter(symbol => synthWhitelist.includes(symbol))
+    .filter(symbol => exchangeWhitelist.includes(symbol))
     .map(symbol => {
       const { address, tokenAddress } = addrs.exchanges[symbol]
       return [

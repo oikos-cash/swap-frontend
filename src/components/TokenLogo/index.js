@@ -37,6 +37,10 @@ export default function TokenLogo({ address, size = '1rem', symbol = '', ...rest
   let path = ''
   if (address === 'TRX') {
     return <StyledEthereumLogo size={size} />
+  } else if (symbol === 'JST') {
+    path = 'https://coin.top/production/logo/just_icon.png'
+  } else if (symbol === 'USDJ') {
+    path = 'https://coin.top/production/logo/usdj.png'
   } else if (symbol.startsWith('s') || symbol === 'OKS') {
     // snx token
     path = `https://oikos.exchange/images/synths/${symbol}-icon.svg`
