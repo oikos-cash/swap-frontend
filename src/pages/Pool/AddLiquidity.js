@@ -279,9 +279,11 @@ export default function AddLiquidity({ params }) {
   const poolTokenPercentage =
     poolTokenBalance && totalPoolTokens && isNewExchange === false && !totalPoolTokens.isZero()
       ? poolTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))).div(totalPoolTokens)
-      : 0
+      : undefined
  
- 
+  if (poolTokenPercentage)
+    console.log({poolTokenPercentage : poolTokenPercentage.toString()})
+
   const ethShare =
     exchangeETHBalance && poolTokenPercentage
       ? exchangeETHBalance.mul(poolTokenPercentage).div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
@@ -736,7 +738,7 @@ export default function AddLiquidity({ params }) {
           </ExchangeRateWrapper>
           <ExchangeRateWrapper>
             <ExchangeRate>
-              {t('yourPoolShare')} ({exchangeETHBalance && amountFormatter(poolTokenPercentage, 16, 2)}%)
+              {t('yourPoolShare')} ({exchangeETHBalance && amountFormatter(poolTokenPercentage, 4, 2)}%)
             </ExchangeRate>
             <span>
               {ethShare && tokenShare
