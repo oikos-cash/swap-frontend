@@ -278,8 +278,10 @@ export default function AddLiquidity({ params }) {
   // 6 decimals
   const poolTokenPercentage =
     poolTokenBalance && totalPoolTokens && isNewExchange === false && !totalPoolTokens.isZero()
-      ? poolTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))).div(totalPoolTokens)
-      : undefined
+      ? poolTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(18))).div(totalPoolTokens)
+      : 0
+ 
+ 
   const ethShare =
     exchangeETHBalance && poolTokenPercentage
       ? exchangeETHBalance.mul(poolTokenPercentage).div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
