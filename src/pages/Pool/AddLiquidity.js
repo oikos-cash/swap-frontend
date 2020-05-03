@@ -278,7 +278,7 @@ export default function AddLiquidity({ params }) {
   // 6 decimals
   const poolTokenPercentage =
     poolTokenBalance && totalPoolTokens && isNewExchange === false && !totalPoolTokens.isZero()
-      ? poolTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(18))).div(totalPoolTokens)
+      ? poolTokenBalance.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6))).div(totalPoolTokens)
       : 0
  
  
