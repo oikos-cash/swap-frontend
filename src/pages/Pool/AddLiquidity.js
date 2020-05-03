@@ -147,21 +147,26 @@ function addLiquidityStateReducer(state, action) {
     case 'UPDATE_VALUE': {
       const { inputValue, outputValue } = state
       const { field, value } = action.payload
-      return {
+      const newState = {
         ...state,
         inputValue: field === INPUT ? value : inputValue,
         outputValue: field === OUTPUT ? value : outputValue,
         lastEditedField: field
       }
+
+      console.log("UPDATE_VALUE", { state, action, newState  })
+      return newState
     }
     case 'UPDATE_DEPENDENT_VALUE': {
       const { inputValue, outputValue } = state
       const { field, value } = action.payload
-      return {
+      const newState = {
         ...state,
         inputValue: field === INPUT ? value : inputValue,
         outputValue: field === OUTPUT ? value : outputValue
       }
+      console.log('UPDATE_DEPENDENT_VALUE', { state, action, newState  })
+      return newState
     }
     default: {
       return initialAddLiquidityState()
@@ -221,6 +226,7 @@ export default function AddLiquidity({ params }) {
     initialAddLiquidityState
   )
   const { inputValue, outputValue, lastEditedField, outputCurrency } = addLiquidityState
+
   const inputCurrency = 'TRX'
 
   const [inputValueParsed, setInputValueParsed] = useState()
@@ -239,9 +245,9 @@ export default function AddLiquidity({ params }) {
     if (exchangeContract) {
       // console.log({ exchangeContract })
       try {
-        console.log({ exchangeContract })
+        //console.log({ exchangeContract })
         const totalSupply = await exchangeContract.totalSupply().call()
-        console.log({ totalSupply })
+        //console.log({ totalSupply })
         setTotalPoolTokens(totalSupply)
       } catch (err) {
         console.error('exchangeContract.totalSupply().call() failed')
@@ -422,12 +428,12 @@ export default function AddLiquidity({ params }) {
     ]
 
     const callValue = inputValueParsed
-    console.log({ args, callValue })
+    //console.log({ args, callValue })
     exchangeContract
       .addLiquidity(...args)
       .send({ callValue })
       .then(response => {
-        console.log({ response })
+        //console.log({ response })
         // log pool added to and total usd amount
         /*
         ReactGA.event({
@@ -470,7 +476,7 @@ export default function AddLiquidity({ params }) {
       if (outputValue) {
         try {
           const parsedOutputValue = ethers.utils.parseUnits(outputValue, decimals)
-          console.log({ parsedOutputValue })
+          //console.log({ parsedOutputValue })
           setOutputValueParsed(parsedOutputValue)
         } catch {
           setZeroDecimalError('Invalid input. For 0 decimal tokens only supply whole number token amounts.')
@@ -499,8 +505,14 @@ export default function AddLiquidity({ params }) {
 
         // console.log('marketRate', marketRate.toString())
         // console.log('input', parsedValue.toString())
-        const currencyAmount = marketRate.mul(parsedValue).mul(bigNumberify(10).pow(bigNumberify(6)))
+        // const currencyAmount = marketRate.mul(parsedValue).mul(bigNumberify(10).pow(bigNumberify(6 - decimals)))
 
+        const currencyAmount = marketRate
+          .mul(parsedValue)
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6 - decimals)))
+
+        console.log({inputValue, decimals, parsedValue: parsedValue.toString(), marketRate: marketRate.toString(), currencyAmount: currencyAmount.toString()})
         // console.log('currencyAmount', currencyAmount.toString())
         /*
         const currencyAmount = marketRate
@@ -597,7 +609,7 @@ export default function AddLiquidity({ params }) {
 
   const [showUnlock, setShowUnlock] = useState(false)
   useEffect(() => {
-    console.log({ outputValueParsed, allowance })
+    //console.log({ outputValueParsed, allowance })
     if (outputValueParsed && allowance) {
       if (allowance.lt(outputValueParsed)) {
         setOutputError(t('unlockTokenCont'))
@@ -626,6 +638,7 @@ export default function AddLiquidity({ params }) {
       setShowOutputWarning(false)
     }
   }, [newOutputDetected, setShowOutputWarning])
+    console.log({outputValue})
   return (
     <>
       {showOutputWarning && (
@@ -677,6 +690,7 @@ export default function AddLiquidity({ params }) {
           dispatchAddLiquidityState({ type: 'SELECT_CURRENCY', payload: outputCurrency })
         }}
         onValueChange={outputValue => {
+          console.log({outputValue})
           dispatchAddLiquidityState({ type: 'UPDATE_VALUE', payload: { value: outputValue, field: OUTPUT } })
         }}
         extraTextClickHander={() => {

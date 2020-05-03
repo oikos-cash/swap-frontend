@@ -549,7 +549,7 @@ export function useETHPriceInUSD() {
       const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tron&vs_currencies=usd')
       const data = await response.json()
       const price = data.tron.usd;
-      console.log(`tron price ${price}`)
+      //console.log(`tron price ${price}`)
       return new BigNumber(price)
     }
     const updatePrice = async () => {

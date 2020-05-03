@@ -45,7 +45,7 @@ function getLibrary(provider_) {
   const getBalance = async address => {
     try {
       const balance = await tronWeb.trx.getBalance(toTronAddr(address))
-      console.log('getBalance', address, balance.toString())
+      //console.log('getBalance', address, balance.toString())
       // console.log(`${address} balance is`, balance)
       return balance
     } catch (err) {

@@ -341,7 +341,7 @@ export default function CurrencyInputPanel({
                 .approve(selectedTokenExchangeAddress, ethers.constants.MaxUint256)
                 .send()
                 .then(response => {
-                  console.log({ response })
+                  //console.log({ response })
                   // kev: TODO : { hash: response }
                   addTransaction(response, { approval: selectedTokenAddress })
                 })
@@ -464,7 +464,7 @@ function CurrencySelectModal({ isOpen, onDismiss, onTokenSelect, urlAddedTokens,
   const allTokens = useAllTokenDetails()
 
   const { account, chainId } = useWeb3React()
-  console.log({ chainId })
+  //console.log({ chainId })
 
   // BigNumber.js instance
   const ethPrice = useETHPriceInUSD()
