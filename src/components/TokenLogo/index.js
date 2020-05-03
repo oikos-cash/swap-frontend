@@ -41,7 +41,9 @@ export default function TokenLogo({ address, size = '1rem', symbol = '', ...rest
     path = 'https://coin.top/production/logo/just_icon.png'
   } else if (symbol === 'USDJ') {
     path = 'https://coin.top/production/logo/usdj.png'
-  } else if (symbol.startsWith('s') || symbol === 'OKS') {
+  } else if (symbol === 'TEWKEN') {
+    path = 'https://coin.top/production/upload/logo/TBhxyECmAg3uCqqmEHQvGJbrgj9cn1yMZ1.png?t=1586829704545'
+  }else if (symbol.startsWith('s') || symbol === 'OKS') {
     // snx token
     path = `https://oikos.exchange/images/synths/${symbol}-icon.svg`
     // path = `https://raw.githubusercontent.com/oikos-cash/exchange/master/public/images/synths/${symbol}-icon.svg`
