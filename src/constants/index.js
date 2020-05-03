@@ -29,13 +29,13 @@ const buildTokens = addrs => {
   return Object.keys(addrs.exchanges)
     .filter(symbol => exchangeWhitelist.includes(symbol))
     .map(symbol => {
-      const { address, tokenAddress } = addrs.exchanges[symbol]
+      const { address, tokenAddress, decimals = 18 } = addrs.exchanges[symbol]
       return [
         toEthAddress(tokenAddress),
         {
           [NAME]: symbol,
           [SYMBOL]: symbol,
-          [DECIMALS]: 18,
+          [DECIMALS]: decimals,
           [EXCHANGE_ADDRESS]: toEthAddress(address)
         }
       ]
