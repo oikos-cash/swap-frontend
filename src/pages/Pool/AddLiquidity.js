@@ -507,10 +507,16 @@ export default function AddLiquidity({ params }) {
         // console.log('input', parsedValue.toString())
         // const currencyAmount = marketRate.mul(parsedValue).mul(bigNumberify(10).pow(bigNumberify(6 - decimals)))
 
-        const currencyAmount = marketRate
-          .mul(parsedValue)
-          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
-          .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6 - decimals)))
+ 
+        let currencyAmount = marketRate.mul(parsedValue)
+        currencyAmount = currencyAmount.div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6)))
+        // c/10^6 * 10^decimals <=> c * 10^(decimals - 6)
+        currencyAmount = currencyAmount.mul(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(decimals - 6)))
+
+        /// currencyAmount = currencyAmount.div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(decimals))) // in sTRX
+        console.log(currencyAmount.toString())
+
+          // .div(ethers.utils.bigNumberify(10).pow(ethers.utils.bigNumberify(6 - decimals)))
 
         console.log({inputValue, decimals, parsedValue: parsedValue.toString(), marketRate: marketRate.toString(), currencyAmount: currencyAmount.toString()})
         // console.log('currencyAmount', currencyAmount.toString())
