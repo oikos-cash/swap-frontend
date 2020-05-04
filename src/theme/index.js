@@ -48,7 +48,7 @@ const theme = darkMode => ({
 
   // for setting css on <html>
   backgroundColor: darkMode ? '#333639' : white,
-  logoImg: darkMode ? 'oikos-logo-dark.svg' : 'oikos-logo.svg',
+  logoImg: darkMode ? '/oikos-logo-dark.svg' : '/oikos-logo.svg',
   logoTitle: darkMode ? '#fff' : '#000',
   modalBackground: darkMode ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.5)',
   inputBackground: darkMode ? '#202124' : white,
@@ -73,7 +73,7 @@ const theme = darkMode => ({
   malibuBlue: darkMode ? '#46bf89' : '#5CA2FF',
   royalBlue: darkMode ? '#46bf89' : '#2F80ED',
   loadingBlue: darkMode ? '#e4f0ff' : '#e4f0ff',
-  
+
   // purples
   wisteriaPurple: '#46bf89',
   // reds
@@ -115,14 +115,14 @@ export const GlobalStyle = createGlobalStyle`
   @supports (font-variation-settings: normal) {
     html { font-family: 'Inter var', sans-serif; }
   }
-  
+
   html,
   body {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
-    overflow: hidden;    
+    overflow: hidden;
   }
 
   body > div {
