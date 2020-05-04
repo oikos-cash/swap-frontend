@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react'
 import styled from 'styled-components'
 import { BrowserRouter, Redirect, Route, Switch } from 'react-router-dom'
+import Tronweb from 'tronweb'
 
 import Web3ReactManager from '../components/Web3ReactManager'
 import Header from '../components/Header'
@@ -47,6 +48,13 @@ const Body = styled.div`
   /* margin: 0 1.25rem 1.25rem 1.25rem; */
 `
 
+const toEthAddress = s => {
+  return `0x${Tronweb.address
+    .toHex(s)
+    .slice(2)
+    .toLowerCase()}`
+}
+
 export default function App() {
   const params = getAllQueryParams()
   return (
@@ -70,14 +78,13 @@ export default function App() {
                         strict
                         path="/swap/:tokenAddress?"
                         render={({ match, location }) => {
-                          if (isAddress(match.params.tokenAddress)) {
-                            return (
-                              <Swap
-                                location={location}
-                                initialCurrency={isAddress(match.params.tokenAddress)}
-                                params={params}
-                              />
-                            )
+                          let tokenAddress = match.params.tokenAddress
+                          try {
+                            tokenAddress = toEthAddress(tokenAddress)
+                          } catch (err) {}
+                          // console.log('isAddress', isAddress(tokenAddress))
+                          if (isAddress(tokenAddress)) {
+                            return <Swap location={location} initialCurrency={tokenAddress} params={params} />
                           } else {
                             return <Redirect to={{ pathname: '/swap' }} />
                           }
@@ -89,8 +96,12 @@ export default function App() {
                         strict
                         path="/send/:tokenAddress?"
                         render={({ match }) => {
-                          if (isAddress(match.params.tokenAddress)) {
-                            return <Send initialCurrency={isAddress(match.params.tokenAddress)} params={params} />
+                          let tokenAddress = match.params.tokenAddress
+                          try {
+                            tokenAddress = toEthAddress(tokenAddress)
+                          } catch (err) {}
+                          if (isAddress(tokenAddress)) {
+                            return <Send initialCurrency={tokenAddress} params={params} />
                           } else {
                             return <Redirect to={{ pathname: '/send' }} />
                           }
