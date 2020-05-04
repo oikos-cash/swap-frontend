@@ -768,7 +768,6 @@ export default function AddLiquidity({ params }) {
       ) : null}
       {isNewExchange && (
         <NewExchangeWarningText style={{ textAlign: 'center', marginTop: '10px' }}>
-          {t('initialWarning')}
         </NewExchangeWarningText>
       )}
       <Flex>
