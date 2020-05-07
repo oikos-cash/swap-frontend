@@ -11,6 +11,7 @@
   "betaWarning": "Proiectul este încă în versiunea beta. Folosește-l cu grijă, riscul este al tău.",
   "input": "Input",
   "output": "Output",
+  "announcement":"Detaliile de vânzare și detecție de jeton Oikos disponibile, faceți clic pentru detalii",
   "estimated": "estimat",
   "balance": "Balanță: {{ balanceInput }}",
   "unlock": "Deschide",

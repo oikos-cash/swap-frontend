@@ -17,6 +17,7 @@
   "balance": "Saldo: {{ balanceInput }}",
   "unlock": "Sblocca",
   "pending": "In attesa",
+  "announcement": "Vendita di token Oikos e dettagli airdrop disponibili, clicca per informazioni",
   "selectToken": "Seleziona un token",
   "searchOrPaste": "Cerca Nome, Simbolo o Indirizzo Token",
   "searchOrPasteMobile": "Nome, Simbolo, o Indirizzo",

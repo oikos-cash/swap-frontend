@@ -38,6 +38,7 @@
   "recipientAddress": "收款人錢包地址",
   "youAreSending": "你正在發送",
   "willReceive": "將至少收到",
+  "announcement":"提供Oikos代幣銷售和空投詳細信息，請單擊以獲取詳細信息",
   "to": "至",
   "addLiquidity": "增加流動性資金",
   "deposit": "存入",

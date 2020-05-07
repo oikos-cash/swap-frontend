@@ -22,6 +22,7 @@
 	"enterValueCont": "Ingresá un valor en {{ missingCurrencyValue }} para continuar.",
 	"selectTokenCont": "Seleccioná un token para continuar.",
 	"noLiquidity": "Sin liquidez.",
+	"announcement": "Venta de tokens de Oikos y detalles de lanzamiento disponibles, haga clic para más detalles",
 	"unlockTokenCont": "Por favor desbloqueá un token para continuar.",
 	"transactionDetails": "Detalles de la transacción",
 	"hideDetails": "Ocultar detalles",

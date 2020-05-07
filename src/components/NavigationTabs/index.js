@@ -183,6 +183,12 @@ function NavigationTabs({ location: { pathname }, history }) {
 
   return (
     <>
+      {(
+        <Link href="http://tiny.cc/qpuloz" >
+          {t('announcement')}
+          <br /><br />
+        </Link>
+      )}   
       <Tabs>
         {tabOrder.map(({ path, textKey, regex }) => (
           <StyledNavLink key={path} to={path} isActive={(_, { pathname }) => pathname.match(regex)}>
@@ -190,16 +196,18 @@ function NavigationTabs({ location: { pathname }, history }) {
           </StyledNavLink>
         ))}
       </Tabs>
-      {showBetaMessage && (
+      { (
         <BetaMessage onClick={dismissBetaMessage}>
           <span role="img" aria-label="warning">
             💀
-          </span>{' '}
+          </span>{' '} 
           {t('betaWarning')}
         </BetaMessage>
       )}
+   
     </>
   )
 }
 
 export default withRouter(NavigationTabs)
+ 
