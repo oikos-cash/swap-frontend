@@ -152,6 +152,9 @@ const StyledNavLink = styled(NavLink).attrs({
     color: ${({ theme }) => darken(0.1, theme.royalBlue)};
   }
 `
+const StyledLink = styled(Link)`
+  font-weight:bold;
+`
 
 function NavigationTabs({ location: { pathname }, history }) {
   const { t } = useTranslation()
@@ -184,10 +187,10 @@ function NavigationTabs({ location: { pathname }, history }) {
   return (
     <>
       {(
-        <Link href="http://tiny.cc/qpuloz" >
+        <StyledLink href="http://tiny.cc/qpuloz" >
           {t('announcement')}
           <br /><br />
-        </Link>
+        </StyledLink>
       )}   
       <Tabs>
         {tabOrder.map(({ path, textKey, regex }) => (
