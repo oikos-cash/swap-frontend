@@ -13,6 +13,7 @@
   "betaWarning": "Dieses Projekt ist in beta. Nutzung auf eigenes Risiko.",
   "input": "Input",
   "output": "Output",
+  "announcement": "Oikos Token Sale und Airdrop Details verfügbar, klicken Sie hier",
   "estimated": "geschätzt",
   "balance": "Guthaben: {{ balanceInput }}",
   "unlock": "Freischalten",
