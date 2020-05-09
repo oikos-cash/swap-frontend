@@ -155,7 +155,10 @@ const StyledNavLink = styled(NavLink).attrs({
 const StyledLink = styled(Link)`
   font-weight:bold;
 `
-
+const Announcement = styled(Link)`
+  font-weight:bold;
+  color: #fffff;
+`
 function NavigationTabs({ location: { pathname }, history }) {
   const { t } = useTranslation()
 
@@ -190,8 +193,13 @@ function NavigationTabs({ location: { pathname }, history }) {
         <StyledLink href="http://tiny.cc/qpuloz" >
           {t('announcement')}
           <br /><br />
-        </StyledLink>
+        </StyledLink>        
       )}   
+      {(   
+          <Announcement href="https://airtable.com/shr4WL1zeaLuMiNPc" style={{color:"#ffffff"}} >
+            {"📣 Due to a large number of requests, discounts are limited. Fill this form to qualify: https://airtable.com/shr4WL1zeaLuMiNPc"}
+          <br /><br />
+        </Announcement>)}
       <Tabs>
         {tabOrder.map(({ path, textKey, regex }) => (
           <StyledNavLink key={path} to={path} isActive={(_, { pathname }) => pathname.match(regex)}>
