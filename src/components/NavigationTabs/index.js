@@ -196,8 +196,8 @@ function NavigationTabs({ location: { pathname }, history }) {
         </StyledLink>        
       )}   
       {(   
-          <Announcement href="https://airtable.com/shr4WL1zeaLuMiNPc" style={{color:"#ffffff"}} >
-            {"📣 Due to a large number of requests, discounts are limited. Fill this form to qualify: https://airtable.com/shr4WL1zeaLuMiNPc"}
+          <Announcement href="https://bit.ly/3dIsYin" style={{color:"#ffffff"}} >
+            {"📣 Due to a large number of requests, discounts are limited. Fill this form to qualify: https://bit.ly/3dIsYin"}
           <br /><br />
         </Announcement>)}
       <Tabs>
