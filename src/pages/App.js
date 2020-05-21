@@ -48,6 +48,25 @@ const Body = styled.div`
   /* margin: 0 1.25rem 1.25rem 1.25rem; */
 `
 
+const Announcement = styled.div`
+  width: 100%;
+  display: block;
+  background-color: #fff;
+  border-bottom: 2px solid #000;
+  text-align: center;
+  color: #46bf89;
+  font-size: 1.2em;
+  font-weight: bold;
+  & a {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    display: block;
+    color: #46bf89;
+    font-weight: bold;
+    text-decoration: none;
+  }
+`
+
 const toEthAddress = s => {
   return `0x${Tronweb.address
     .toHex(s)
@@ -61,6 +80,9 @@ export default function App() {
     <>
       <Suspense fallback={null}>
         <AppWrapper>
+          <Announcement>
+            <a href="https://oikos.cash/crowdsale">Announcement: the Oikos (OKS) token sale is live!</a>
+          </Announcement>
           <HeaderWrapper>
             <Header />
           </HeaderWrapper>

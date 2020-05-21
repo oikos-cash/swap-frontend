@@ -153,10 +153,10 @@ const StyledNavLink = styled(NavLink).attrs({
   }
 `
 const StyledLink = styled(Link)`
-  font-weight:bold;
+  font-weight: bold;
 `
 const Announcement = styled(Link)`
-  font-weight:bold;
+  font-weight: bold;
   color: #fffff;
 `
 function NavigationTabs({ location: { pathname }, history }) {
@@ -189,17 +189,6 @@ function NavigationTabs({ location: { pathname }, history }) {
 
   return (
     <>
-      {(
-        <StyledLink href="http://tiny.cc/qpuloz" >
-          {t('announcement')}
-          <br /><br />
-        </StyledLink>        
-      )}   
-      {(   
-          <Announcement href="https://bit.ly/3dIsYin" style={{color:"#ffffff"}} >
-            {"📣 Due to a large number of requests, discounts are limited. Fill this form to qualify: https://bit.ly/3dIsYin"}
-          <br /><br />
-        </Announcement>)}
       <Tabs>
         {tabOrder.map(({ path, textKey, regex }) => (
           <StyledNavLink key={path} to={path} isActive={(_, { pathname }) => pathname.match(regex)}>
@@ -207,18 +196,14 @@ function NavigationTabs({ location: { pathname }, history }) {
           </StyledNavLink>
         ))}
       </Tabs>
-      { (
-        <BetaMessage onClick={dismissBetaMessage}>
-          <span role="img" aria-label="warning">
-            💀
-          </span>{' '} 
-          {t('betaWarning')}
-        </BetaMessage>
-      )}
-   
+      <BetaMessage onClick={dismissBetaMessage}>
+        <span role="img" aria-label="warning">
+          💀
+        </span>{' '}
+        {t('betaWarning')}
+      </BetaMessage>
     </>
   )
 }
 
 export default withRouter(NavigationTabs)
- 

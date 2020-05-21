@@ -59,7 +59,7 @@ const LogoTitle = styled.h1`
   color: ${({ theme }) => theme.logoTitle};
   font-size: 18px;
 `
- 
+
 export default function Header() {
   return (
     <HeaderFrame>
@@ -67,9 +67,9 @@ export default function Header() {
         <Title>
           <Nod>
             <Link id="link" href="/">
-            <span role="img" aria-label="logo">
+              <span role="img" aria-label="logo">
                 <Logo></Logo>
-            </span>
+              </span>
             </Link>
           </Nod>
           <Link id="link" href="/" style={{ marginLeft: '20px' }}>
