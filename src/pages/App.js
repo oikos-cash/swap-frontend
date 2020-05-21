@@ -51,7 +51,7 @@ const Body = styled.div`
 const Announcement = styled.div`
   width: 100%;
   display: block;
-  background-color: #fff;
+  background-color: #202124;
   border-bottom: 2px solid #000;
   text-align: center;
   color: #46bf89;
