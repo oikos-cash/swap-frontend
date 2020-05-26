@@ -21,9 +21,7 @@ export const SYMBOL = 'symbol'
 export const DECIMALS = 'decimals'
 export const EXCHANGE_ADDRESS = 'exchangeAddress'
 
-const synthWhitelist = [
-  /*'sUSD', 'sTRX', 'OKS'*/
-]
+const synthWhitelist = ['sUSD', 'sTRX', 'OKS']
 const otherTokensWhitelist = ['USDJ', 'JST', 'TEWKEN', 'DCD']
 
 const exchangeWhitelist = [...synthWhitelist, ...otherTokensWhitelist]
