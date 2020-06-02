@@ -80,9 +80,7 @@ export default function App() {
     <>
       <Suspense fallback={null}>
         <AppWrapper>
-          <Announcement>
-            <a href="https://oikos.cash/crowdsale">Announcement: the Oikos (OKS) token sale is live!</a>
-          </Announcement>
+ 
           <HeaderWrapper>
             <Header />
           </HeaderWrapper>
