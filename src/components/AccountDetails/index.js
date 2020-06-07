@@ -342,7 +342,7 @@ export default function AccountDetails({
                     <StyledLink hasENS={!!ENSName} isENS={false} href={getEtherscanLink(chainId, account, 'address')}>
                       {library.toTronAddr(account)} ↗{' '}
                     </StyledLink>
-                    <Copy toCopy={account} />
+                    <Copy toCopy={library.toTronAddr(account)} />
                   </AccountControl>
                 )}
               </AccountGroupingRow>
