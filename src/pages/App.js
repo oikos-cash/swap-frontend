@@ -81,7 +81,7 @@ export default function App() {
       <Suspense fallback={null}>
         <AppWrapper>
           <Announcement>
-            <a href="https://support.hoo.com/hc/en-us/articles/900001258163">
+            <a href="https://hoo.com/labs/detail/oks">
               Announcement: Oikos IEO on Hoo.com from Jun 12 to Jun 14 🚀
             </a>
           </Announcement>
