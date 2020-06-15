@@ -81,7 +81,7 @@ export default function App() {
       <Suspense fallback={null}>
         <AppWrapper>
           <Announcement>
-            <a href="https://hoo.com/labs/detail/oks2">Announcement: Oikos IEO on Hoo.com from Jun 12 to Jun 14 🚀</a>
+            Oikos IEO on Hoo.com sold out. Thanks to all participants ❤️. Stay tuned for listing announcement. 🚀
           </Announcement>
           <HeaderWrapper>
             <Header />
