@@ -81,7 +81,9 @@ export default function App() {
       <Suspense fallback={null}>
         <AppWrapper>
           <Announcement>
-          📣️ URGENT: Update to sTRX reward contract, if you a liquidity provider please visit this page. 📣️
+            <a href="https://minter.oikos.cash" target="_blank">
+            📣️ URGENT: If you a liquidity provider on the sTRX/TRX pool you MUST migrate to a new contract immediately, visit the Swap Pool tab on minter.oikos.cash for instructions. 📣️
+            </a>
           </Announcement>
           <HeaderWrapper>
             <Header />
