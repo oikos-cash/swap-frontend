@@ -81,7 +81,7 @@ export default function App() {
       <Suspense fallback={null}>
         <AppWrapper>
           <Announcement>
-            Oikos IEO on Hoo.com sold out. Thanks to all participants ❤️. Stay tuned for listing announcement. 🚀
+          📣️ URGENT: Update to sTRX reward contract, if you a liquidity provider please visit this page. 📣️
           </Announcement>
           <HeaderWrapper>
             <Header />
