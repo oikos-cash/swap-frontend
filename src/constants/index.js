@@ -1,4 +1,4 @@
-import { injected, walletconnect, walletlink, fortmatic, portis, torus } from '../connectors'
+import { injected  } from '../connectors'
 
 import addresses from '@oikos/swap/addresses.json'
 

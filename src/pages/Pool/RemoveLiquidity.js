@@ -10,7 +10,7 @@ import { useTransactionAdder } from '../../contexts/Transactions'
 import { useTokenDetails, INITIAL_TOKENS_CONTEXT } from '../../contexts/Tokens'
 import { useAddressBalance } from '../../contexts/Balances'
 
-import { calculateGasMargin, amountFormatter } from '../../utils'
+import {  amountFormatter } from '../../utils'
 import { brokenTokens } from '../../constants'
 
 import { Button } from '../../theme'
@@ -27,7 +27,7 @@ const ALLOWED_SLIPPAGE = ethers.utils.bigNumberify(200)
 const DEADLINE_FROM_NOW = 60 * 15
 
 // denominated in bips
-const GAS_MARGIN = ethers.utils.bigNumberify(1000)
+//const GAS_MARGIN = ethers.utils.bigNumberify(1000)
 
 const BlueSpan = styled.span`
   color: ${({ theme }) => theme.royalBlue};

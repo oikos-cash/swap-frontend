@@ -4,15 +4,15 @@ import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 import { transparentize, darken } from 'polished'
 
-import { useWeb3React, useBodyKeyDown } from '../../hooks'
-import { useAddressBalance } from '../../contexts/Balances'
-import { isAddress } from '../../utils'
+import {  useBodyKeyDown } from '../../hooks'
+//import { useAddressBalance } from '../../contexts/Balances'
+//import { isAddress } from '../../utils'
 import {
   useBetaMessageManager,
-  useSaiHolderMessageManager,
-  useGeneralDaiMessageManager
+  //useSaiHolderMessageManager,
+  //useGeneralDaiMessageManager
 } from '../../contexts/LocalStorage'
-import { Link } from '../../theme/components'
+//import { Link } from '../../theme/components'
 
 const tabOrder = [
   {
@@ -61,48 +61,9 @@ const BetaMessage = styled.div`
   }
 `
 
-const DaiMessage = styled(BetaMessage)`
-  ${({ theme }) => theme.flexColumnNoWrap}
-  position: relative;
-  word-wrap: wrap;
-  overflow: visible;
-  white-space: normal;
-  padding: 1rem 1rem;
-  padding-right: 2rem;
-  line-height: 1.2rem;
-  cursor: default;
-  color: ${({ theme }) => theme.textColor};
-  div {
-    width: 100%;
-  }
-  &:after {
-    content: '';
-  }
-`
 
-const CloseIcon = styled.div`
-  width: 10px !important;
-  top: 0.5rem;
-  right: 1rem;
-  position: absolute;
-  color: ${({ theme }) => theme.wisteriaPurple};
-  :hover {
-    cursor: pointer;
-  }
-`
 
-const WarningHeader = styled.div`
-  margin-bottom: 10px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.uniswapPink};
-`
 
-const WarningFooter = styled.div`
-  margin-top: 10px;
-  font-size: 10px;
-  text-decoration: italic;
-  color: ${({ theme }) => theme.greyText};
-`
 
 const Tabs = styled.div`
   ${({ theme }) => theme.flexRowNoWrap}
@@ -152,17 +113,10 @@ const StyledNavLink = styled(NavLink).attrs({
     color: ${({ theme }) => darken(0.1, theme.royalBlue)};
   }
 `
-const StyledLink = styled(Link)`
-  font-weight: bold;
-`
-const Announcement = styled(Link)`
-  font-weight: bold;
-  color: #fffff;
-`
 function NavigationTabs({ location: { pathname }, history }) {
   const { t } = useTranslation()
 
-  const [showBetaMessage, dismissBetaMessage] = useBetaMessageManager()
+  const [, dismissBetaMessage] = useBetaMessageManager()
 
   // const [showGeneralDaiMessage, dismissGeneralDaiMessage] = useGeneralDaiMessageManager()
 

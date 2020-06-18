@@ -63,7 +63,7 @@
     "check:all": "yarn check:lint && yarn check:format"
   },
   "eslintConfig": {
-    "extends": "react-app"
+    "extends": ["react-app"]
   },
   "browserslist": {
     "production": [

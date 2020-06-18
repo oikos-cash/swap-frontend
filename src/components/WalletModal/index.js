@@ -13,7 +13,7 @@ import Option from './Option'
 import { SUPPORTED_WALLETS } from '../../constants'
 import { usePrevious } from '../../hooks'
 import { Link } from '../../theme'
-import MetamaskIcon from '../../assets/images/metamask.png'
+//import MetamaskIcon from '../../assets/images/metamask.png'
 import { ReactComponent as Close } from '../../assets/images/x.svg'
 import { injected, walletconnect, fortmatic, portis } from '../../connectors'
 import { useWalletModalToggle, useWalletModalOpen } from '../../contexts/Application'
@@ -194,7 +194,7 @@ export default function WalletModal({ pendingTransactions, confirmedTransactions
   // get wallets user can switch too, depending on device/browser
   function getOptions() {
     const isMetamask = window.ethereum && window.ethereum.isMetaMask
-    const isTronlink = window.tronWeb
+    //const isTronlink = window.tronWeb
     return Object.keys(SUPPORTED_WALLETS).map(key => {
       const option = SUPPORTED_WALLETS[key]
       // check for mobile options

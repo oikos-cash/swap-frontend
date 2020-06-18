@@ -1,5 +1,5 @@
 import { AbstractConnector } from '@web3-react/abstract-connector'
-import warning from 'tiny-warning'
+//import warning from 'tiny-warning'
 
 const tron2ethAddr = str => `0x${str.slice(2).toLowerCase()}`
 

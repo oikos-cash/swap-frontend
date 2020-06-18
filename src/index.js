@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import ReactGA from 'react-ga'
 import { Web3ReactProvider, createWeb3ReactRoot } from '@web3-react/core'
-import { ethers } from 'ethers'
+//import { ethers } from 'ethers'
 
 import { NetworkContextName } from './constants'
 import { isMobile } from 'react-device-detect'

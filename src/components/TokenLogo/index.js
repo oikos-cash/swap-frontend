@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import styled from 'styled-components'
 import { isAddress } from '../../utils'
-import { useWeb3React } from '@web3-react/core'
+//import { useWeb3React } from '@web3-react/core'
 
 import { ReactComponent as EthereumLogo } from '../../assets/images/tron-logo.svg'
 

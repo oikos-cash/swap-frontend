@@ -19,7 +19,7 @@ import TokenLogo from '../TokenLogo'
 import SearchIcon from '../../assets/images/magnifying-glass.svg'
 import { useTransactionAdder, usePendingApproval } from '../../contexts/Transactions'
 import { useTokenDetails, useAllTokenDetails, INITIAL_TOKENS_CONTEXT } from '../../contexts/Tokens'
-import { useAddressBalance } from '../../contexts/Balances'
+//import { useAddressBalance } from '../../contexts/Balances'
 import { ReactComponent as Close } from '../../assets/images/x.svg'
 import { transparentize } from 'polished'
 import { Spinner } from '../../theme'
@@ -305,9 +305,9 @@ export default function CurrencyInputPanel({
 
   const allTokens = useAllTokenDetails()
 
-  const { account } = useWeb3React()
+  //const { account } = useWeb3React()
 
-  const userTokenBalance = useAddressBalance(account, selectedTokenAddress)
+  //const userTokenBalance = useAddressBalance(account, selectedTokenAddress)
 
   function renderUnlockButton() {
     if (disableUnlock || !showUnlock || selectedTokenAddress === 'TRX' || !selectedTokenAddress) {
@@ -318,7 +318,7 @@ export default function CurrencyInputPanel({
           <SubCurrencySelect
             onClick={async () => {
               // let estimatedGas
-              let useUserBalance = false
+              //let useUserBalance = false
               /*
               estimatedGas = await tokenContract.estimate
                 .approve(selectedTokenExchangeAddress, ethers.constants.MaxUint256)

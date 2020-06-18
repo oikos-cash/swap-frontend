@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useWeb3React } from '../../hooks'
 import { brokenTokens } from '../../constants'
-import { amountFormatter, calculateGasMargin, isAddress } from '../../utils'
+import { amountFormatter, isAddress } from '../../utils'
 
 import { useExchangeContract } from '../../hooks'
 import { useTokenDetails, INITIAL_TOKENS_CONTEXT } from '../../contexts/Tokens'
@@ -39,7 +39,7 @@ const TOKEN_ALLOWED_SLIPPAGE_DEFAULT = 50
 const DEFAULT_DEADLINE_FROM_NOW = 60 * 15
 
 // % above the calculated gas cost that we actually send, denominated in bips
-const GAS_MARGIN = ethers.utils.bigNumberify(1000)
+// const GAS_MARGIN = ethers.utils.bigNumberify(1000)
 
 const DownArrowBackground = styled.div`
   ${({ theme }) => theme.flexRowNoWrap}
@@ -627,20 +627,20 @@ export default function ExchangePage({ initialCurrency, sending = false, params 
 
     let method, args, value
 
-    let inputEthPerToken = 1
+    /*let inputEthPerToken = 1
     if (inputCurrency !== 'TRX') {
       inputEthPerToken = inputReserveToken && inputReserveETH ? inputReserveETH / inputReserveToken : null
-    }
-    let ethTransactionSize = inputEthPerToken * inputValueFormatted
+    }*/
+    // let ethTransactionSize = inputEthPerToken * inputValueFormatted
 
     // params for GA event
-    let action = ''
-    let label = ''
+    //let action
+    //let label
 
     if (independentField === INPUT) {
       // set GA params
-      action = sending ? 'SendInput' : 'SwapInput'
-      label = outputCurrency
+      //action = sending ? 'SendInput' : 'SwapInput'
+      //label = outputCurrency
 
       if (swapType === ETH_TO_TOKEN) {
         // estimate = sending ? contract.estimate.ethToTokenTransferInput : contract.estimate.ethToTokenSwapInput
@@ -671,8 +671,8 @@ export default function ExchangePage({ initialCurrency, sending = false, params 
       }
     } else if (independentField === OUTPUT) {
       // set GA params
-      action = sending ? 'SendOutput' : 'SwapOutput'
-      label = outputCurrency
+      //action = sending ? 'SendOutput' : 'SwapOutput'
+      //label = outputCurrency
 
       if (swapType === ETH_TO_TOKEN) {
         //  estimate = sending ? contract.estimate.ethToTokenTransferOutput : contract.estimate.ethToTokenSwapOutput

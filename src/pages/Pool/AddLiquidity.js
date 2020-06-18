@@ -2,7 +2,7 @@ import React, { useReducer, useState, useCallback, useEffect, useMemo } from 're
 import { useTranslation } from 'react-i18next'
 import { createBrowserHistory } from 'history'
 import { ethers } from 'ethers'
-import ReactGA from 'react-ga'
+//import ReactGA from 'react-ga'
 import styled from 'styled-components'
 
 import { Button } from '../../theme'
@@ -14,7 +14,7 @@ import WarningCard from '../../components/WarningCard'
 
 import { useWeb3React, useExchangeContract } from '../../hooks'
 import { brokenTokens } from '../../constants'
-import { amountFormatter, calculateGasMargin } from '../../utils'
+import { amountFormatter } from '../../utils'
 import { useTransactionAdder } from '../../contexts/Transactions'
 import { useTokenDetails, INITIAL_TOKENS_CONTEXT } from '../../contexts/Tokens'
 import { useAddressBalance, useExchangeReserves } from '../../contexts/Balances'
@@ -408,7 +408,7 @@ export default function AddLiquidity({ params }) {
 
   async function onAddLiquidity() {
     // take ETH amount, multiplied by ETH rate and 2 for total tx size
-    let ethTransactionSize = (inputValueParsed / 1e6) * 2
+    //let ethTransactionSize = (inputValueParsed / 1e6) * 2
 
     const deadline = Math.ceil(Date.now() / 1000) + DEADLINE_FROM_NOW
 
