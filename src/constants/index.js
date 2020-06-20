@@ -1,4 +1,4 @@
-import { injected  } from '../connectors'
+import { injected } from '../connectors'
 
 import addresses from '@oikos/swap/addresses.json'
 
@@ -22,7 +22,8 @@ export const DECIMALS = 'decimals'
 export const EXCHANGE_ADDRESS = 'exchangeAddress'
 
 const synthWhitelist = ['sUSD', 'sTRX', 'OKS']
-const otherTokensWhitelist = ['USDJ', 'JST', 'TEWKEN', 'DCD', "USDT"]
+const otherTokensWhitelist = ['USDJ', 'JST', 'TEWKEN', 'DCD']
+// const otherTokensWhitelist = ['USDJ', 'JST', 'TEWKEN', 'DCD', "USDT"]
 
 const exchangeWhitelist = [...synthWhitelist, ...otherTokensWhitelist]
 const buildTokens = addrs => {
