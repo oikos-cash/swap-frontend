@@ -81,9 +81,7 @@ export default function App() {
       <Suspense fallback={null}>
         <AppWrapper>
           <Announcement>
-            <a href="https://minter.oikos.cash" target="_blank" rel="noopener noreferrer">
-            URGENT: If you a liquidity provider on the sTRX/TRX pool you MUST migrate to a new contract immediately, visit the Swap Pool tab on minter.oikos.cash for instructions.
-            </a>
+            IMPORTANT: DO NOT USE THE USDT POOL. THIS IS A TEMPORARY DEPLOYMENT TO UNLOCK FUNDS.
           </Announcement>
           <HeaderWrapper>
             <Header />
