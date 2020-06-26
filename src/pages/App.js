@@ -48,6 +48,7 @@ const Body = styled.div`
   /* margin: 0 1.25rem 1.25rem 1.25rem; */
 `
 
+/*
 const Announcement = styled.div`
   width: 100%;
   display: block;
@@ -66,6 +67,7 @@ const Announcement = styled.div`
     text-decoration: none;
   }
 `
+*/
 
 const toEthAddress = s => {
   return `0x${Tronweb.address
