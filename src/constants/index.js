@@ -23,9 +23,10 @@ export const EXCHANGE_ADDRESS = 'exchangeAddress'
 
 const synthWhitelist = ['sUSD', 'sTRX', 'OKS']
 const otherTokensWhitelist = ['USDJ', 'JST', 'TEWKEN', 'DCD']
+const secretWhitelist = localStorage.getItem('development') ? ['CNS'] : []
 // const otherTokensWhitelist = ['USDJ', 'JST', 'TEWKEN', 'DCD', "USDT"]
 
-const exchangeWhitelist = [...synthWhitelist, ...otherTokensWhitelist]
+const exchangeWhitelist = [...synthWhitelist, ...otherTokensWhitelist, ...secretWhitelist]
 const buildTokens = addrs => {
   return Object.keys(addrs.exchanges)
     .filter(symbol => exchangeWhitelist.includes(symbol))
