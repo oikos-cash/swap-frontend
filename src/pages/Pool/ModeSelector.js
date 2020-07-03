@@ -21,12 +21,12 @@ const poolTabOrder = [
     path: '/remove-liquidity',
     textKey: 'removeLiquidity',
     regex: /\/remove-liquidity/
-  },
-  {
-    path: '/create-exchange',
-    textKey: 'createExchange',
-    regex: /\/create-exchange.*/
   }
+  // {
+  //   path: '/create-exchange',
+  //   textKey: 'createExchange',
+  //   regex: /\/create-exchange.*/
+  // }
 ]
 
 const LiquidityContainer = styled.div`
