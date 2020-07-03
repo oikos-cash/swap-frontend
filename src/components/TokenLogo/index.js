@@ -50,6 +50,8 @@ export default function TokenLogo({ address, size = '1rem', symbol = '', ...rest
     path = 'https://coin.top/production/logo/usdtlogo.png'
   } else if (symbol === 'CNS') {
     path = 'https://coin.top/production/upload/logo/TMJWuBDvwvcm6QUWXDaC6GqTyq3FgEmWEt.png'
+  } else if (symbol === 'BNKR') {
+    path = 'https://coin.top/production/logo/TNo59Khpq46FGf4sD7XSWYFNfYfbc8CqNK.png'
   } else if ((symbol && symbol.startsWith('s')) || symbol === 'OKS') {
     // snx token
     path = `https://oikos.exchange/images/synths/${symbol}-icon.svg`
