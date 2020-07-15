@@ -52,7 +52,7 @@ export default function TokenLogo({ address, size = '1rem', symbol = '', ...rest
     path = 'https://coin.top/production/upload/logo/TMJWuBDvwvcm6QUWXDaC6GqTyq3FgEmWEt.png'
   } else if (symbol === 'BNKR') {
     path = 'https://coin.top/production/logo/TNo59Khpq46FGf4sD7XSWYFNfYfbc8CqNK.png'
-  } else if ((symbol && symbol.startsWith('s')) || symbol === 'OKS') {
+  } else if ((symbol && symbol.startsWith('s')) || symbol === 'OKS' || symbol === 'sETH') {
     // snx token
     path = `https://oikos.exchange/images/synths/${symbol}-icon.svg`
     // path = `https://raw.githubusercontent.com/oikos-cash/exchange/master/public/images/synths/${symbol}-icon.svg`
