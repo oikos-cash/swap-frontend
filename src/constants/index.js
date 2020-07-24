@@ -22,7 +22,7 @@ export const DECIMALS = 'decimals'
 export const EXCHANGE_ADDRESS = 'exchangeAddress'
 
 const synthWhitelist = ['sUSD', 'sTRX', 'OKS']
-const otherTokensWhitelist = ['USDJ', 'JST', 'TEWKEN', 'DCD', 'BNKR', 'sETH']
+const otherTokensWhitelist = ['USDJ', 'JST', 'TEWKEN', 'DCD', 'BNKR', 'sETH', 'CSX', 'MIMA']
 const secretWhitelist = localStorage.getItem('development') ? ['CNS'] : []
 
 const exchangeWhitelist = [...synthWhitelist, ...otherTokensWhitelist, ...secretWhitelist]
