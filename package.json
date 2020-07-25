@@ -5,7 +5,7 @@
   "homepage": "https://swap.oikos.cash",
   "private": true,
   "dependencies": {
-    "@oikos/swap": "^0.7.6",
+    "@oikos/swap": "^0.7.7",
     "@reach/dialog": "^0.2.8",
     "@reach/tooltip": "^0.2.0",
     "@types/jest": "^25.1.3",
