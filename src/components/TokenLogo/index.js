@@ -59,6 +59,8 @@ export default function TokenLogo({ address, size = '1rem', symbol = '', ...rest
     path = 'https://coin.top/production/upload/logo/TFouHv3jFqMbHuz1Y2bXyShTywNrofauSA.png?t=1593179243068'
   } else if (symbol === 'CSX') {
     path = 'https://coin.top/production/upload/logo/TJxU6TzuixbCagS3cXBpXHJGuqBY3awkJv.png?t=1594942934634'
+  } else if (symbol === 'CNS') {
+    path = 'https://coin.top/production/upload/logo/TMJWuBDvwvcm6QUWXDaC6GqTyq3FgEmWEt.png?t=1588774698930'
   } else if (!error && !BAD_IMAGES[address]) {
     path = TOKEN_ICON_API(address.toLowerCase())
   } else {
