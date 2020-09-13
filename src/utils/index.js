@@ -29,7 +29,7 @@ export function safeAccess(object, path) {
 
 const ETHERSCAN_PREFIXES = {
   1: '',
-  2: 'shasta.'
+  2: 'shasta.',
 }
 
 export function getEtherscanLink(networkId, data, type) {
@@ -188,7 +188,7 @@ export function getContract(address, ABI, library, account) {
   const tronWeb = library.provider
   const abi = ABI
   try {
-    const contract = new TronWeb.Contract(tronWeb, abi, contractAddress)
+    const contract = tronWeb.contract(abi, contractAddress)
     // console.log({ contract })
 
     // console.log('contract', contract)
@@ -222,9 +222,9 @@ export async function getTokenName(tokenAddress, library) {
       getContract(tokenAddress, ERC20_BYTES32_ABI, library)
         .name()
         .call()
-        .then(bytes32 => ethers.utils.parseBytes32String(bytes32))
+        .then((bytes32) => ethers.utils.parseBytes32String(bytes32))
     )
-    .catch(error => {
+    .catch((error) => {
       error.code = ERROR_CODES.TOKEN_SYMBOL
       throw error
     })
@@ -244,9 +244,9 @@ export async function getTokenSymbol(tokenAddress, library) {
       return contractBytes32
         .symbol()
         .call()
-        .then(bytes32 => ethers.utils.parseBytes32String(bytes32))
+        .then((bytes32) => ethers.utils.parseBytes32String(bytes32))
     })
-    .catch(error => {
+    .catch((error) => {
       error.code = ERROR_CODES.TOKEN_SYMBOL
       throw error
     })
@@ -261,7 +261,7 @@ export async function getTokenDecimals(tokenAddress, library) {
   return getContract(tokenAddress, ERC20_ABI, library)
     .decimals()
     .call()
-    .catch(error => {
+    .catch((error) => {
       error.code = ERROR_CODES.TOKEN_DECIMALS
       throw error
     })
@@ -294,7 +294,7 @@ export function formatToUsd(price) {
   const usdPrice = formatFixed(price, {
     decimalPlaces: 2,
     dropTrailingZeros: false,
-    format
+    format,
   })
   return usdPrice
 }
@@ -305,9 +305,7 @@ export async function getTokenBalance(tokenAddress, address, library) {
     throw Error(`Invalid 'tokenAddress' or 'address' parameter '${tokenAddress}' or '${address}'.`)
   }
 
-  const result = await getContract(tokenAddress, ERC20_ABI, library)
-    .balanceOf(address)
-    .call()
+  const result = await getContract(tokenAddress, ERC20_ABI, library).balanceOf(address).call()
   return result
 }
 
@@ -320,9 +318,7 @@ export async function getTokenAllowance(address, tokenAddress, spenderAddress, l
     )
   }
 
-  const allowance = await getContract(tokenAddress, ERC20_ABI, library)
-    .allowance(address, spenderAddress)
-    .call()
+  const allowance = await getContract(tokenAddress, ERC20_ABI, library).allowance(address, spenderAddress).call()
 
   return allowance
 }
